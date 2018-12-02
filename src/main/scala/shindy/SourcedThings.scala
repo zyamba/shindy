@@ -75,7 +75,7 @@ case class SourcedUpdate[STATE, +EVENT, A](
     * val changePassword: SourcedUpdate[UserRecord, PasswordChangedEvent, Unit] = ???
     *
     * val changeBoth: SourcedUpdate[UserRecord, UserEvent, Unit] = for {
-    *   _ <- changeUsername.contra[UserEvent]
+    *   _ <- changeUsername.adaptEvent[UserEvent]
     *   _ <- changePassword
     * } yield ()
     * }}}
