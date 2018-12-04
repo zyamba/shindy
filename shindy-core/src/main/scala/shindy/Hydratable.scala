@@ -6,34 +6,37 @@ import cats.Monad
 import cats.data.Kleisli
 import cats.syntax.either._
 import cats.syntax.option._
+import cats.syntax.flatMap._
 import shindy.EventSourced.EventHandler
 
-import scala.language.higherKinds
+import scala.language.{higherKinds, reflectiveCalls}
 
 trait Hydratable[STATE, EVENT, F[_]] {
   def applyAndSaveChanges[Out](
     sourcedUpdate: SourcedUpdate[STATE, EVENT, Out]
   ): Kleisli[F, EventStore[EVENT, F], Either[String, (UUID, STATE, Out)]]
+
+  def state: Kleisli[F, EventStore[EVENT, F], Either[String, STATE]]
 }
 
 object Hydratable {
   def hydrate[STATE, EVENT, F[_]](aggregateId: UUID)(
     implicit eventHandler: EventHandler[STATE, EVENT],
     monadF: Monad[F],
-    streamCompiler: fs2.Stream.Compiler[F, Either[String, ?]],
+    streamCompiler: fs2.Stream.Compiler[F, F],
   ): Hydratable[STATE, EVENT, F] = {
 
     new HydratableInt[STATE, EVENT, F](Kleisli { eventStore: EventStore[EVENT, F] =>
-      val ev = eventStore.loadEvents(aggregateId)
-      val computedState: Either[String, Option[STATE]] = ev.compile[F, Either[String, ?], EVENT]
-        .fold(Option.empty[STATE]) { case (state, event) =>
-          eventHandler.apply(state, event).some
-        }
-      val compStateAsEither = computedState.map(s => Either.fromOption(s, "Aggregate events couldn't be found"))
-      val mappedToSourcedCreation = compStateAsEither.map { stateEither =>
-        EventSourced.sourceState[STATE, EVENT](stateEither).map(_ => aggregateId)
+      val ev: fs2.Stream[F, EVENT] = eventStore.loadEvents(aggregateId)
+      val computedState = ev.fold(Option.empty[STATE]) { case (state, event) =>
+        eventHandler(state, event).some
+      }.compile.toList
+      val stateAsEither = monadF.map(computedState) { fRes =>
+        Either.fromOption(fRes.headOption.flatten, "Aggregate events couldn't be found")
       }
-      monadF.pure(mappedToSourcedCreation)
+      monadF.map(stateAsEither) { e =>
+        EventSourced.sourceState[STATE, EVENT](e).map(_ => aggregateId).asRight
+      }
     })
   }
 
@@ -63,6 +66,10 @@ object Hydratable {
           savedResults.traverse(identity)
         }
       }
+    }
+
+    override def state: Kleisli[F, EventStore[EVENT, F], Either[String, STATE]] = sourcedCreation.map { creation =>
+      creation.flatMap(_.state)
     }
   }
 }
