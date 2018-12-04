@@ -5,12 +5,12 @@ import java.util.UUID
 
 import cats.effect.IO
 import cats.syntax.either._
-import org.scalatest.FreeSpec
+import org.scalatest.{FreeSpec, Matchers}
 import shindy.EventSourced.{EventHandler, source, sourceNew}
 
 import scala.collection.mutable
 
-class HydratableTest extends FreeSpec {
+class HydratableTest extends FreeSpec with Matchers {
 
   object BusinessDomain {
 
@@ -41,7 +41,7 @@ class HydratableTest extends FreeSpec {
     }
 
     def changeBirthdate(datetime: LocalDate): SourcedUpdate[UserRecord, BirthdateUpdated, Unit] = source {
-      user: UserRecord =>
+      _: UserRecord =>
         Either.cond(
           datetime.isBefore(LocalDate.of(2018, 1, 1)),
           BirthdateUpdated(datetime),
@@ -52,7 +52,7 @@ class HydratableTest extends FreeSpec {
 
   import BusinessDomain._
 
-  class InMemoryEventDatabase extends EventStore[UserRecordChangeEvent] {
+  class InMemoryEventDatabase extends EventStore[UserRecordChangeEvent, IO] {
     private val store = mutable.Map.empty[UUID, Vector[UserRecordChangeEvent]]
 
     override def loadEvents(aggregateId: UUID): fs2.Stream[IO, BusinessDomain.UserRecordChangeEvent] =
@@ -74,11 +74,17 @@ class HydratableTest extends FreeSpec {
 
     "createNew" in {
 
-      val p = Hydratable.createNew[UserRecord, UserRecordChangeEvent, UserRecordChangeEvent](
-        createUser(UUID.randomUUID(), "test@test.com")
+      val userId = UUID.randomUUID()
+      val p = Hydratable.createNew[UserRecord, UserRecordChangeEvent, IO](
+        createUser(userId, "test@test.com")
       ) applyAndSaveChanges updateEmail("updated@email.com")
 
-      val (id, _, _) = p run eventStore unsafeRunSync()
+      val value = p.run(eventStore).unsafeRunSync()
+      value should be ('right)
+
+      val (id, state, _) = value.right.get
+      id shouldBe userId
+      state.email shouldBe "updated@email.com"
 
       val results = eventStore.loadEvents(id).compile.toList unsafeRunSync()
       println(results)
