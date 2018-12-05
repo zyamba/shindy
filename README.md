@@ -1,6 +1,6 @@
 # shindy
 
-Lightweight Event Sourcing library for scala.
+Lightweight Composible Event Sourcing library for Scala.
 
 Heavily inspired by [scalaio-2017-esmonad](https://github.com/dohzya/scalaio-2017-esmonad) presentation.
 
