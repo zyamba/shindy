@@ -1,4 +1,5 @@
 # shindy
+[![CircleCI](https://circleci.com/gh/zyamba/shindy.svg?style=shield&circle-token=64e321432a5ce4e96a85cb9e02af5605155131af)](https://circleci.com/gh/zyamba/shindy)
 
 Lightweight Composible Event Sourcing library for Scala.
 
