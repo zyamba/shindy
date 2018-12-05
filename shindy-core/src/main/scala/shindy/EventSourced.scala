@@ -24,6 +24,12 @@ object EventSourced {
   def sourceNew[STATE] = new sourceNewPartiallyApplied[STATE]()
 
   /**
+    * Produces new SourcedCreation without logging any events.
+    */
+  def sourceState[STATE, EVENT](block: => Either[String, STATE]): SourcedCreation[STATE, EVENT, Unit] =
+    SourcedCreation(block, SourcedUpdate.pure(()))
+
+  /**
     * Builds SourcedUpdate from `STATE => Either[String, EVENT]`
     * @param block Block of code that maybe produces an Event
     * @param eventHandler Event handler
