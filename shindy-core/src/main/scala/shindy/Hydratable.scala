@@ -7,16 +7,19 @@ import cats.data.Kleisli
 import cats.syntax.either._
 import cats.syntax.option._
 import cats.syntax.flatMap._
+import cats.syntax.functor._
 import shindy.EventSourced.EventHandler
 
 import scala.language.{higherKinds, reflectiveCalls}
 
-trait Hydratable[STATE, EVENT, F[_]] {
-  def applyAndSaveChanges[Out](
-    sourcedUpdate: SourcedUpdate[STATE, EVENT, Out]
-  ): Kleisli[F, EventStore[EVENT, F], Either[String, (UUID, STATE, Out)]]
-
+trait Hydratable[STATE, EVENT, A, F[_]] {
   def state: Kleisli[F, EventStore[EVENT, F], Either[String, STATE]]
+
+  def update[B](su: SourcedUpdate[STATE, EVENT, B]): Hydratable[STATE, EVENT, B, F] = update(_ => su)
+
+  def update[B](f: A => SourcedUpdate[STATE, EVENT, B]): Hydratable[STATE, EVENT, B, F]
+
+  def persist(store: EventStore[EVENT, F]): F[Either[String, (UUID, STATE, A)]]
 }
 
 object Hydratable {
@@ -24,18 +27,18 @@ object Hydratable {
     implicit eventHandler: EventHandler[STATE, EVENT],
     monadF: Monad[F],
     streamCompiler: fs2.Stream.Compiler[F, F],
-  ): Hydratable[STATE, EVENT, F] = {
+  ): Hydratable[STATE, EVENT, Unit, F] = {
 
-    new HydratableInt[STATE, EVENT, F](Kleisli { eventStore: EventStore[EVENT, F] =>
+    new HydratableInternal[STATE, EVENT, Unit, F](Kleisli { eventStore: EventStore[EVENT, F] =>
       val ev: fs2.Stream[F, EVENT] = eventStore.loadEvents(aggregateId)
       val computedState = ev.fold(Option.empty[STATE]) { case (state, event) =>
         eventHandler(state, event).some
       }.compile.toList
-      val stateAsEither = monadF.map(computedState) { fRes =>
+      val stateAsEither = computedState.map { fRes =>
         Either.fromOption(fRes.headOption.flatten, "Aggregate events couldn't be found")
       }
-      monadF.map(stateAsEither) { e =>
-        EventSourced.sourceState[STATE, EVENT](e).map(_ => aggregateId).asRight
+      stateAsEither.map { e =>
+        EventSourced.sourceState[STATE, EVENT](e).map(_ => (aggregateId, ())).asRight
       }
     })
   }
@@ -43,33 +46,45 @@ object Hydratable {
 
   def createNew[STATE, EVENT, F[_]](
     sourcedCreation: SourcedCreation[STATE, EVENT, UUID]
-  )(implicit Fmonad: Monad[F]): Hydratable[STATE, EVENT, F] = {
-    new HydratableInt[STATE, EVENT, F](Kleisli.pure(sourcedCreation.adaptEvent[EVENT].asRight))
+  )(implicit Fmonad: Monad[F]): Hydratable[STATE, EVENT, Unit, F] = {
+    new HydratableInternal[STATE, EVENT, Unit, F](
+      Kleisli.pure(sourcedCreation.map(id => (id, ())).asRight)
+    )
   }
 
-  private class HydratableInt[STATE, EVENT, F[_]](
-    sourcedCreation: Kleisli[F, EventStore[EVENT, F], Either[String, SourcedCreation[STATE, EVENT, UUID]]]
-  )(implicit monadF: Monad[F]) extends Hydratable[STATE, EVENT, F] {
-    override def applyAndSaveChanges[Out](
-      sourcedUpdate: SourcedUpdate[STATE, EVENT, Out]
-    ): Kleisli[F, EventStore[EVENT, F], Either[String, (UUID, STATE, Out)]] = {
+  type ResultWithId[A] = (UUID, A)
 
-      sourcedCreation.flatMap { creationEither =>
-        val programResults = creationEither.flatMap { creationProg =>
-          (creationProg andThen (id => sourcedUpdate.map(o => (id, o)))).run
-        }
+  private class HydratableInternal[STATE, EVENT, A, F[_]](
+    sourcedCreation: Kleisli[F, EventStore[EVENT, F], Either[String, SourcedCreation[STATE, EVENT, ResultWithId[A]]]]
+  )(implicit monadF: Monad[F]) extends Hydratable[STATE, EVENT, A, F] {
 
-        Kleisli { eventStore: EventStore[EVENT, F] =>
-          val savedResults = programResults.map { case (events, state, (id, out)) =>
-            monadF.map(eventStore.storeEvents(id, events))(_ => (id, state, out))
+    override def update[B](f: A => SourcedUpdate[STATE, EVENT, B]): Hydratable[STATE, EVENT, B, F] =
+      new HydratableInternal[STATE, EVENT, B, F](
+        sourcedCreation.map(_.map {
+          creation => creation andThen adaptComposeFn(f)
+        })
+      )
+
+    override def persist(eventStore: EventStore[EVENT, F]): F[Either[String, (UUID, STATE, A)]] = {
+      sourcedCreation.run(eventStore).flatMap {
+        _.flatMap {
+          _.run.map {
+            case (events, state, (id, a)) =>
+              eventStore.storeEvents(id, events).map { _ =>
+                (id, state, a)
+              }
           }
-          savedResults.traverse(identity)
-        }
+        }.traverse(identity)
       }
     }
 
-    override def state: Kleisli[F, EventStore[EVENT, F], Either[String, STATE]] = sourcedCreation.map { creation =>
-      creation.flatMap(_.state)
+    override def state: Kleisli[F, EventStore[EVENT, F], Either[String, STATE]] =
+      sourcedCreation.map(_.flatMap(_.state))
+
+    private def adaptComposeFn[B](
+      f: A => SourcedUpdate[STATE, EVENT, B]
+    ): ResultWithId[A] => SourcedUpdate[STATE, EVENT, ResultWithId[B]]  = {
+      case (id, a) => f(a).map(b => (id, b))
     }
   }
 }

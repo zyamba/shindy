@@ -4,9 +4,7 @@ import java.time.LocalDate
 import java.util.UUID
 
 import cats.effect.IO
-import cats.syntax.either._
 import org.scalatest.{FreeSpec, Matchers}
-import shindy.EventSourced.{EventHandler, source, sourceNew}
 
 import scala.collection.mutable
 
@@ -54,11 +52,11 @@ class HydratableTest extends FreeSpec with Matchers {
     "createNew" in {
 
       val userId = UUID.randomUUID()
-      val p = Hydratable.createNew[UserRecord, UserRecordChangeEvent, IO](
+      val hydratedAggregate = Hydratable.createNew[UserRecord, UserRecordChangeEvent, IO](
         createUser(userId, "test@test.com")
-      ) applyAndSaveChanges updateEmail("updated@email.com")
+      ) update updateEmail("updated@email.com")
 
-      val value = p.run(eventStore).unsafeRunSync()
+      val value = hydratedAggregate.persist(eventStore).unsafeRunSync()
       value should be('right)
 
       val (id, state, _) = value.right.get
