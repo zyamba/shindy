@@ -37,10 +37,10 @@ class HydratableTest extends FreeSpec with Matchers {
       eventStore.storeEvents(userId, events) unsafeRunSync()
 
       // hydrate record
-      val stateRun = Hydratable.hydrate[UserRecord, UserRecordChangeEvent, IO](userId).state
+      val stateRun = Hydratable.hydrate[UserRecord, UserRecordChangeEvent, IO](userId).state(eventStore)
 
       // evaluate state
-      val results = stateRun run eventStore unsafeRunSync()
+      val results = stateRun unsafeRunSync()
       results should be('right)
       val state = results.right.get
 
@@ -67,5 +67,14 @@ class HydratableTest extends FreeSpec with Matchers {
       println(results)
     }
 
+    "attempt to load non existent aggregate should report errors" in {
+
+      val userId = UUID.randomUUID()
+      val nonExistentRecord = Hydratable.hydrate[UserRecord, UserRecordChangeEvent, IO](userId) update
+        updateEmail("new@email.com")
+
+      an [Exception] shouldBe thrownBy (nonExistentRecord.state(eventStore).unsafeRunSync())
+      an [Exception] shouldBe thrownBy (nonExistentRecord.persist(eventStore).unsafeRunSync())
+    }
   }
 }
