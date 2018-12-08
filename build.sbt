@@ -3,7 +3,6 @@ inThisBuild(
     organization := "io.github.zyamba",
     organizationName := "zyamba",
     organizationHomepage := Some(url("https://github.com/zyamba")),
-    version := "0.1.1-SNAPSHOT",
     scalaVersion := "2.12.6",
 
     addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.8"),
@@ -44,6 +43,8 @@ ThisBuild / publishTo := {
   else Some("releases" at nexus + "service/local/staging/deploy/maven2")
 }
 ThisBuild / publishMavenStyle := true
+
+ThisBuild / releasePublishArtifactsAction := PgpKeys.publishSigned.value
 
 val examples = project in file("examples") settings(
   skip in publish := true,
