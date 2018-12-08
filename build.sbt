@@ -1,7 +1,9 @@
 inThisBuild(
   List(
-    organization := "zyamba",
-    version := "0.1",
+    organization := "io.github.zyamba",
+    organizationName := "zyamba",
+    organizationHomepage := Some(url("https://github.com/zyamba")),
+    version := "0.1.1-SNAPSHOT",
     scalaVersion := "2.12.6",
 
     addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.8"),
@@ -11,11 +13,41 @@ inThisBuild(
     libraryDependencies ++= Seq(
       "org.scalactic" %% "scalactic" % "3.0.5" % Test,
       "org.scalatest" %% "scalatest" % "3.0.5" % Test
-    )
+    ),
+
+    scmInfo := Some(
+      ScmInfo(
+        url("https://github.com/zyamba/shindy"),
+        "scm:git@github.com:zyamba/shindy.git"
+      )
+    ),
+
+    developers := List(
+      Developer(
+        id    = "ivanobulo",
+        name  = "Ivan Luzyanin",
+        email = "ivanobulo@gmail.com",
+        url   = url("http://twitter.com/ivanobulo")
+      )
+    ),
+
+    pomIncludeRepository := { _ => false },
+    description := "Lightweight Composible Event Sourcing library for Scala",
+    licenses := List("MIT" -> new URL("https://opensource.org/licenses/MIT")),
+    homepage := Some(url("https://github.com/zyamba/shindy")),
+
   )
 )
+ThisBuild / publishTo := {
+  val nexus = "https://oss.sonatype.org/"
+  if (isSnapshot.value) Some("snapshots" at nexus + "content/repositories/snapshots")
+  else Some("releases" at nexus + "service/local/staging/deploy/maven2")
+}
+ThisBuild / publishMavenStyle := true
 
-val examples = project in file("examples") settings()
+val examples = project in file("examples") settings(
+  skip in publish := true,
+)
 val `shindy-core` = project in file("shindy-core") settings (
   libraryDependencies ++= Seq(
     "org.typelevel" %% "cats-core" % "1.5.0-RC1",
@@ -27,5 +59,5 @@ val `shindy-core` = project in file("shindy-core") settings (
 
 val root = project in file(".") settings(
   name := "shindy",
-  publishArtifact := false,
+  skip in publish := true,
 ) aggregate(`shindy-core`, examples)
