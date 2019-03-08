@@ -34,7 +34,7 @@ object SourcedUpdate {
 
   //noinspection TypeAnnotation
   implicit def SourcedUpdateMonadOps[S, E, A](self: SourcedUpdate[S, E, A]) = new {
-    def map[B](f: A => B): SourcedUpdate[S, E, B] = SourcedUpdate(self.contraAdapt[E].run.map(f))
+    def map[B](f: A => B): SourcedUpdate[S, E, B] = SourcedUpdate(self.adaptEvent[E].run.map(f))
 
     def flatMap[B](f: A => SourcedUpdate[S, E, B]): SourcedUpdate[S, E, B] = self.andThen(f)
   }
@@ -125,13 +125,9 @@ case class SourcedUpdate[STATE, +EVENT, A](
     */
   def andThen[E >: EVENT, B](other: A => SourcedUpdate[STATE, E, B]): SourcedUpdate[STATE, E, B] = {
     SourcedUpdate {
-      val contraRun = this.run.transform[Vector[E], STATE, A]((ev, s, a) => (ev, s, a))
-      contraRun.flatMap(other(_).run)
+      this.adaptEvent[E].run.flatMap(other(_).run)
     }
   }
-
-  private[shindy] def contraAdapt[E >: EVENT]: SourcedUpdate[STATE, E, A] =
-    SourcedUpdate(this.run.transform[Vector[E], STATE, A]((ev, s, a) => (ev, s, a)))
 
   private[shindy] def tell[E >: EVENT](event: E): SourcedUpdate[STATE, E, A] = {
     val contraRun = this.run.transform[Vector[E], STATE, A]((ev, s, a) => (ev, s, a))
