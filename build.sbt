@@ -46,17 +46,27 @@ ThisBuild / publishMavenStyle := true
 
 ThisBuild / releasePublishArtifactsAction := PgpKeys.publishSigned.value
 
-val examples = project in file("examples") settings(
+val examples = project settings(
   skip in publish := true,
 )
-val `shindy-core` = project in file("shindy-core") settings (
+val `shindy-core` = project settings (
+  libraryDependencies ++= Seq(
+    "org.typelevel" %% "cats-core" % "1.5.0-RC1",
+    "co.fs2" %% "fs2-core" % "1.0.0",
+    //  "co.fs2" %% "fs2-io" % "1.0.0",
+    "org.typelevel" %% "cats-effect" % "1.0.0" % Test,
+    "org.scalacheck" %% "scalacheck" % "1.14.0" % Test
+  )
+)
+
+val `shindy-eventstore-postgres` = project settings (
   libraryDependencies ++= Seq(
     "org.typelevel" %% "cats-core" % "1.5.0-RC1",
     "co.fs2" %% "fs2-core" % "1.0.0",
     //  "co.fs2" %% "fs2-io" % "1.0.0",
     "org.typelevel" %% "cats-effect" % "1.0.0" % Test,
   )
-)
+) dependsOn `shindy-core`
 
 val root = project in file(".") settings(
   name := "shindy",
