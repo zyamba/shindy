@@ -5,18 +5,18 @@ import java.util.UUID
 
 import cats.effect.IO
 import org.scalatest.{FreeSpec, Matchers}
+import shindy.examples.UserService._
 
 import scala.Function.tupled
 import scala.collection.mutable
 
-class HydratedTest extends FreeSpec with Matchers {
+class HydratedTest extends FreeSpec with Matchers with Hydration[UserRecord, UserRecordChangeEvent] {
 
-  import BusinessDomain._
+  class InMemoryEventDatabase(val store: mutable.Map[UUID, Vector[VersionedEvent[UserRecordChangeEvent]]] = mutable.Map.empty)
+    extends EventStore[UserRecord, UserRecordChangeEvent, IO] {
 
-  class InMemoryEventDatabase(val store: mutable.Map[UUID, Vector[VersionedEvent[UserRecordChangeEvent]]] = mutable.Map.empty) extends EventStore[UserRecord, UserRecordChangeEvent, IO] {
-
-    override def loadEvents(aggregateId: UUID, fromVersion: Option[Int] = None): fs2.Stream[IO, VersionedEvent[BusinessDomain.UserRecordChangeEvent]] =
-      fs2.Stream.fromIterator[IO, VersionedEvent[BusinessDomain.UserRecordChangeEvent]]{
+    override def loadEvents(aggregateId: UUID, fromVersion: Option[Int] = None): fs2.Stream[IO, VersionedEvent[UserRecordChangeEvent]] =
+      fs2.Stream.fromIterator[IO, VersionedEvent[UserRecordChangeEvent]]{
         val minVersion = fromVersion.getOrElse(0)
         store(aggregateId).iterator.filter(_.version >= minVersion)
       }
@@ -46,7 +46,7 @@ class HydratedTest extends FreeSpec with Matchers {
       eventStore.storeEvents(userId, versionedEvents) unsafeRunSync()
 
       // hydrate record
-      val stateRun = Hydrated.hydrate[UserRecord, UserRecordChangeEvent, IO](userId).state(eventStore)
+      val stateRun = hydrate[IO](userId).state(eventStore)
 
       // evaluate state
       val results = stateRun unsafeRunSync()
@@ -60,10 +60,10 @@ class HydratedTest extends FreeSpec with Matchers {
 
     "events versions should be increasing" in {
       val userId = UUID.randomUUID()
-      Hydrated.createNew[UserRecord, UserRecordChangeEvent, IO](createUser(userId, "test@gmail.com"))
+      createNew[IO](createUser(userId, "test@gmail.com"))
         .persist(eventStore).unsafeRunSync() should be('right)
 
-      Hydrated.hydrate[UserRecord, UserRecordChangeEvent, IO](userId).update(
+      hydrate[IO](userId).update(
         updateEmail("updated@email.com") andThen changeBirthdate(LocalDate.of(2000, 1, 1))
       ).persist(eventStore).unsafeRunSync() should be('right)
 
@@ -75,7 +75,7 @@ class HydratedTest extends FreeSpec with Matchers {
     "createNew" in {
 
       val userId = UUID.randomUUID()
-      val hydratedAggregate = Hydrated.createNew[UserRecord, UserRecordChangeEvent, IO](
+      val hydratedAggregate = createNew[IO](
         createUser(userId, "test@test.com")
       ) update updateEmail("updated@email.com")
 
@@ -93,7 +93,7 @@ class HydratedTest extends FreeSpec with Matchers {
     "attempt to load non existent aggregate should report errors" in {
 
       val userId = UUID.randomUUID()
-      val nonExistentRecord = Hydrated.hydrate[UserRecord, UserRecordChangeEvent, IO](userId) update
+      val nonExistentRecord = hydrate[IO](userId) update
         updateEmail("new@email.com")
 
       an [Exception] shouldBe thrownBy (nonExistentRecord.state(eventStore).unsafeRunSync())

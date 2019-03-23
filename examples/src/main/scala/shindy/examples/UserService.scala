@@ -1,13 +1,13 @@
-package shindy
+package shindy.examples
 
 import java.time.LocalDate
 import java.util.UUID
 
 import cats.syntax.either._
+import shindy.EventSourced._
+import shindy._
 
-import shindy.EventSourced.{EventHandler, source, sourceNew}
-
-object BusinessDomain {
+object UserService {
 
   // state
   sealed case class UserRecord(id: UUID, email: String, birthdate: Option[LocalDate] = None)
