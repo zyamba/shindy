@@ -1,18 +1,10 @@
 package shindy
-
 import cats.data.ReaderWriterStateT
 import cats.instances.either._
 import cats.instances.vector._
 
 import scala.annotation.unchecked.uncheckedVariance
 import scala.language.{higherKinds, implicitConversions, reflectiveCalls}
-
-object SourcedCreation {
-  def apply[STATE, EVENT, A](
-    create: => Either[String, STATE],
-    upd: SourcedUpdate[STATE, EVENT, A]
-  ): SourcedCreation[STATE, EVENT, A] = new SourcedCreation(create, upd)
-}
 
 object SourcedUpdate {
   def pure[STATE, EVENT] = new purePartiallyApplied[STATE, EVENT]
@@ -39,27 +31,6 @@ object SourcedUpdate {
     def flatMap[B](f: A => SourcedUpdate[S, E, B]): SourcedUpdate[S, E, B] = self.andThen(f)
   }
 
-}
-
-class SourcedCreation[STATE, +EVENT, A](
-  create: => Either[String, STATE],
-  upd: SourcedUpdate[STATE, EVENT, A]
-) {
-
-  def adaptEvent[E >: EVENT]: SourcedCreation[STATE, E, A] = this
-
-  def events: Either[String, Vector[EVENT]] = create.flatMap(upd.events)
-
-  def state: Either[String, STATE] = create.flatMap(upd.state)
-
-  def run: Either[String, (Vector[EVENT], STATE, A)] = create.flatMap(upd.run(_))
-
-  def map[B](f: A => B): SourcedCreation[STATE, EVENT, B] = new SourcedCreation[STATE, EVENT, B](create, upd.map(f))
-
-  def andThen[E >: EVENT, B](cont: SourcedUpdate[STATE, E, B]): SourcedCreation[STATE, E, B] = andThen(_ => cont)
-
-  def andThen[E >: EVENT, B](cont: A => SourcedUpdate[STATE, E, B]): SourcedCreation[STATE, E, B] =
-    SourcedCreation(create, upd andThen cont)
 }
 
 case class SourcedUpdate[STATE, +EVENT, A](
