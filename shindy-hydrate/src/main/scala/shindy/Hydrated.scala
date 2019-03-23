@@ -11,6 +11,13 @@ import shindy.EventSourced.EventHandler
 
 import scala.language.{higherKinds, reflectiveCalls}
 
+/**
+  * Wraps newly created or loaded from EventStore [[shindy.SourcedCreation]].
+  * @tparam STATE Type of the state
+  * @tparam EVENT Type of the event
+  * @tparam A Output value type
+  * @tparam F Effect type
+  */
 trait Hydrated[STATE, EVENT, A, F[_]] {
   def state(eventStore: EventStore[STATE, EVENT, F]): F[Either[String, STATE]]
 
