@@ -1,4 +1,4 @@
-package shindy
+package shindy.hydration
 
 import java.time.LocalDate
 import java.util.UUID

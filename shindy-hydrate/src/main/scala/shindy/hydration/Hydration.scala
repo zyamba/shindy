@@ -1,9 +1,10 @@
-package shindy
+package shindy.hydration
 
 import java.util.UUID
 
 import cats.Monad
 import shindy.EventSourced.EventHandler
+import shindy.SourcedCreation
 
 import scala.language.higherKinds
 

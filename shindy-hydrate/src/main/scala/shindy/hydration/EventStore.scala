@@ -1,4 +1,4 @@
-package shindy
+package shindy.hydration
 
 import java.util.UUID
 
