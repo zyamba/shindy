@@ -1,17 +1,20 @@
+import Dependencies._
+
 inThisBuild(
   List(
     organization := "io.github.zyamba",
     organizationName := "zyamba",
     organizationHomepage := Some(url("https://github.com/zyamba")),
-    scalaVersion := "2.12.6",
+    scalaVersion := "2.12.8",
 
     addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.8"),
 
     scalacOptions ++= Seq("-deprecation", "-feature"),
 
     libraryDependencies ++= Seq(
-      "org.scalactic" %% "scalactic" % "3.0.5" % Test,
-      "org.scalatest" %% "scalatest" % "3.0.5" % Test
+      scalactic % Test,
+      scalatest % Test,
+      scalacheck % Test
     ),
 
     scmInfo := Some(
@@ -46,12 +49,11 @@ ThisBuild / publishMavenStyle := true
 
 ThisBuild / releasePublishArtifactsAction := PgpKeys.publishSigned.value
 
+
 lazy val `shindy-core` = project settings (
   libraryDependencies ++= Seq(
-    "org.typelevel" %% "cats-core" % "1.5.0-RC1",
-    "co.fs2" %% "fs2-core" % "1.0.0",
-    "org.typelevel" %% "cats-effect" % "1.0.0" % Test,
-    "org.scalacheck" %% "scalacheck" % "1.14.0" % Test
+    `cats-core`,
+    `fs2-core`
   )
 )
 
@@ -65,14 +67,19 @@ lazy val `shindy-hydrate` = project settings (
 
 lazy val `shindy-eventstore-postgres` = project settings (
   libraryDependencies ++= Seq(
-    "org.typelevel" %% "cats-core" % "1.5.0-RC1",
-    "co.fs2" %% "fs2-core" % "1.0.0",
-    //  "co.fs2" %% "fs2-io" % "1.0.0",
-    "org.typelevel" %% "cats-effect" % "1.0.0" % Test,
-  )
-) dependsOn `shindy-hydrate`
+    `circe-core`,
+    `circe-parser`,
+    `circe-generic`,
+    `fs2-core`,
+    postgresJdbcDriver,
+    `doobie-postgres`,
+    `doobie-hikari`,
+    `doobie-scalatest` % Test
+  ),
+  dependencyOverrides += "com.zaxxer" % "HikariCP" % "3.3.1"
+) dependsOn(`shindy-hydrate`, examples % Test)
 
 lazy val root = project in file(".") settings(
   name := "shindy",
   skip in publish := true,
-) aggregate(`shindy-core`, `shindy-hydrate`, examples)
+) aggregate(`shindy-core`, `shindy-hydrate`, `shindy-eventstore-postgres`, examples)

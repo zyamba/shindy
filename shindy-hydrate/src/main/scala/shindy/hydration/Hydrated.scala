@@ -1,4 +1,4 @@
-package shindy
+package shindy.hydration
 
 import java.util.UUID
 
@@ -8,6 +8,7 @@ import cats.syntax.either._
 import cats.syntax.functor._
 import cats.syntax.option._
 import shindy.EventSourced.EventHandler
+import shindy.{EventSourced, SourcedCreation, SourcedUpdate}
 
 import scala.language.{higherKinds, reflectiveCalls}
 
