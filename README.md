@@ -16,7 +16,7 @@ Heavily inspired by [scalaio-2017-esmonad](https://github.com/dohzya/scalaio-201
   import java.util.UUID
   import cats.syntax.either._
 
-  object BusinessDomain {
+  object UserService {
 
     // state
     sealed case class UserRecord(id: UUID, email: String, birthdate: Option[LocalDate] = None)
