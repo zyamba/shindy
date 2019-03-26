@@ -54,7 +54,7 @@ Heavily inspired by [scalaio-2017-esmonad](https://github.com/dohzya/scalaio-201
     }
   }
   
-  import BusinessDomain._
+  import UserService._
   
   val results = createUser(UUID.randomUUID(), "email@test.com") andThen changeBirthdate(LocalDate.of(1970, 1, 1)) run
   val (events, finalState, _) = results.right.get
