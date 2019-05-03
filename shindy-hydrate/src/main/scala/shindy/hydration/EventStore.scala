@@ -12,7 +12,7 @@ trait EventStore[STATE, EVENT, F[_]] {
   def storeEvents(aggregateId: UUID, event: Vector[VersionedEvent[EVENT]]): F[Unit]
 
   /**
-    * Loads latest snapshot from event store. If the event store supports snapshotting
+    * Loads latest snapshot from event store. If the event store supports snapshoting
     * it will return latest snapshot available and its version.
     *
     * @param aggregateId Aggregate ID

@@ -1,4 +1,6 @@
 import Dependencies._
+import sbt.Keys.testOptions
+import sbt.Tests
 
 inThisBuild(
   List(
@@ -49,6 +51,13 @@ ThisBuild / publishMavenStyle := true
 
 ThisBuild / releasePublishArtifactsAction := PgpKeys.publishSigned.value
 
+val DbTests = config("db").extend(Test)
+configs(DbTests)
+
+lazy val dbTestsCommonSettings = inConfig(DbTests)(Defaults.testTasks) ++ Seq(
+  testOptions in Test := Tests.Argument("-l", "DatabaseTest") :: Nil,
+  testOptions in DbTests := Tests.Argument("-n", "DatabaseTest") :: Nil
+)
 
 lazy val `shindy-core` = project settings (
   libraryDependencies ++= Seq(
@@ -65,7 +74,8 @@ lazy val `shindy-hydrate` = project settings (
   libraryDependencies ++= Seq()
 ) dependsOn (`shindy-core`, examples % Test)
 
-lazy val `shindy-eventstore-postgres` = project settings (
+lazy val `shindy-eventstore-postgres` = project.configs(DbTests).settings (
+  dbTestsCommonSettings,
   libraryDependencies ++= Seq(
     `circe-core`,
     `circe-parser`,
@@ -74,10 +84,11 @@ lazy val `shindy-eventstore-postgres` = project settings (
     postgresJdbcDriver,
     `doobie-postgres`,
     `doobie-hikari`,
-    `doobie-scalatest` % Test
+    `doobie-scalatest` % Test,
+    pureconfig % Test
   ),
-  dependencyOverrides += "com.zaxxer" % "HikariCP" % "3.3.1"
-) dependsOn(`shindy-hydrate`, examples % Test)
+  dependencyOverrides += hikariCp
+).dependsOn(`shindy-hydrate`, examples % Test)
 
 lazy val root = project in file(".") settings(
   name := "shindy",

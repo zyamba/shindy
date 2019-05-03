@@ -1,6 +1,5 @@
 package shindy.eventstore.postgres
 
-import java.time.LocalDateTime
 import java.util.UUID
 
 import io.circe.Json

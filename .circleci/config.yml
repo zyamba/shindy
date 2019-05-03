@@ -5,6 +5,11 @@ jobs:
   build:
     docker:
       - image: circleci/openjdk:8-jdk
+      - image: circleci/postgres:9.6.2-alpine
+        environment:
+          POSTGRES_USER: eventstore
+          POSTGRES_DB: eventstore
+          POSTGRES_PASSWORD: eventstore
 
     working_directory: ~/repo
 
@@ -18,7 +23,7 @@ jobs:
       # Download and cache dependencies
       - restore_cache:
           keys:
-            - v2-dependencies-{{ checksum "build.sbt" }}
+            - v2-dependencies-{{ checksum "project/Dependencies.scala" }}
             # fallback to using the latest cache if no exact match is found
             - v2-dependencies-
 
@@ -28,7 +33,7 @@ jobs:
           paths:
             - ~/.ivy2
             - ~/.sbt
-          key: v2-dependencies-{{ checksum "build.sbt" }}
+          key: v2-dependencies-{{ checksum "project/Dependencies.scala" }}
 
       # run tests!
       - run: cat /dev/null | sbt test:test
