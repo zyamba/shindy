@@ -8,7 +8,7 @@ import cats.instances.vector._
 import cats.syntax.functor._
 import doobie.implicits._
 import doobie.postgres.implicits._
-import doobie.util.fragment
+import doobie.util.{fragment, update}
 import doobie.util.transactor.Transactor
 import doobie.util.update.Update
 import io.circe.{Decoder, Encoder, Json}
@@ -25,14 +25,21 @@ object Store {
     ) = new Store[STATE, EVENT, M](aggregateType, xa)
   }
 
-  private[postgres] def selectEvents(aggregateId: UUID) =
+  private def selectEvents(aggregateId: UUID): fragment.Fragment =
     sql"select serial_num, aggregate_id, aggregate_type, aggregate_version, event_body, event_time from event" ++
-      fr" where aggregate_id = $aggregateId order by aggregate_version"
+      fr" where aggregate_id = $aggregateId"
 
-  private[postgres] val insertEvent: Update[(String, UUID, Int, Json)] =
+  private[postgres] val insertEvent: update.Update[(String, UUID, Int, Json)] =
     Update("insert into event (aggregate_type, aggregate_id, aggregate_version, event_body) values (?,?,?,?)")
 
-  private[postgres] def andVersionGreaterEqualThen(versionInclusive: Int): fragment.Fragment = fr"and aggregate_version >= $versionInclusive"
+  private[postgres] def andVersionGreaterEqualThen(versionInclusive: Int): fragment.Fragment =
+    fr"and aggregate_version >= $versionInclusive"
+
+  private[postgres] def selectEvents(aggregateId: UUID, fromVersion: Option[Int]): fragment.Fragment = {
+    val versionFilter = fromVersion.map(andVersionGreaterEqualThen)
+      .getOrElse(fragment.Fragment.empty)
+    selectEvents(aggregateId) ++ versionFilter ++ fr" order by aggregate_version"
+  }
 }
 
 class Store[STATE: Decoder : Encoder, EVENT: Decoder : Encoder, M[_]](aggregateType: String, xa: Transactor[M])(
@@ -43,9 +50,7 @@ class Store[STATE: Decoder : Encoder, EVENT: Decoder : Encoder, M[_]](aggregateT
   import Store._
 
   override def loadEvents(aggregateId: UUID, fromVersion: Option[Int]): fs2.Stream[M, VersionedEvent[EVENT]] = {
-    val versionFilter = fromVersion.map(andVersionGreaterEqualThen)
-      .getOrElse(fragment.Fragment.empty)
-    (selectEvents(aggregateId) ++ versionFilter).query[StoreEvent].stream.transact(xa)
+    selectEvents(aggregateId, fromVersion).query[StoreEvent].stream.transact(xa)
       .map(se => VersionedEvent(Decoder[EVENT].decodeJson(se.eventBody).fold(throw _, identity), se.aggregateVersion))
   }
 

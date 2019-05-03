@@ -72,6 +72,7 @@ private[shindy] object Hydrated {
           val versionedEvents = events.zip(Stream.from(r.aggregateInitVersion.map(_ + 1).getOrElse(0)))
             .map(Function tupled VersionedEvent.apply)
 
+          // TODO Save state snapshot as well
           evS.storeEvents(r.aggregateId, versionedEvents).map(_ => (r.aggregateId, state, r.out))
         }
       }
