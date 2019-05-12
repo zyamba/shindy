@@ -12,24 +12,32 @@ import scala.collection.mutable
 
 class HydratedTest extends FreeSpec with Matchers with Hydration[UserRecord, UserRecordChangeEvent] {
 
-  class InMemoryEventDatabase(val store: mutable.Map[UUID, Vector[VersionedEvent[UserRecordChangeEvent]]] = mutable.Map.empty)
+  class InMemoryEventDatabase(
+    val eventsStore: mutable.Map[UUID, Vector[VersionedEvent[UserRecordChangeEvent]]] = mutable.Map.empty,
+    val stateSnapshot: mutable.Map[UUID, (UserRecord, Int)] = mutable.Map.empty
+  )
     extends EventStore[UserRecord, UserRecordChangeEvent, IO] {
 
     override def loadEvents(aggregateId: UUID, fromVersion: Option[Int] = None): fs2.Stream[IO, VersionedEvent[UserRecordChangeEvent]] =
       fs2.Stream.fromIterator[IO, VersionedEvent[UserRecordChangeEvent]]{
         val minVersion = fromVersion.getOrElse(0)
-        store(aggregateId).iterator.filter(_.version >= minVersion)
+        eventsStore(aggregateId).iterator.filter(_.version >= minVersion)
       }
 
     override def storeEvents(aggregateId: UUID, events: Vector[VersionedEvent[UserRecordChangeEvent]]): IO[Unit] =  IO {
-      val storedEvents = store.getOrElseUpdate(aggregateId, Vector.empty)
+      val storedEvents = eventsStore.getOrElseUpdate(aggregateId, Vector.empty)
       val products: Vector[VersionedEvent[UserRecordChangeEvent]] = storedEvents ++ events
-      store.update(aggregateId, products)
+      eventsStore.update(aggregateId, products)
     }
 
-    override def loadLatestStateSnapshot(aggregateId: UUID): IO[Option[(UserRecord, Int)]] = IO.pure(None)
+    override def loadLatestStateSnapshot(aggregateId: UUID): IO[Option[(UserRecord, Int)]] = IO {
+      stateSnapshot.get(aggregateId)
+    }
 
-    override def storeSnapshot(aggregateId: UUID, state: UserRecord, version: Int): IO[Unit] = IO.pure(())
+    override def storeSnapshot(aggregateId: UUID, state: UserRecord, version: Int): IO[Int] = IO {
+      stateSnapshot.update(aggregateId, state -> version)
+      1
+    }
   }
 
   "Methods tests" - {

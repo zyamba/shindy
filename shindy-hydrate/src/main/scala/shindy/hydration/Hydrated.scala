@@ -6,6 +6,7 @@ import cats.Monad
 import cats.data.Kleisli
 import cats.syntax.either._
 import cats.syntax.functor._
+import cats.syntax.flatMap._
 import cats.syntax.option._
 import shindy.EventSourced.EventHandler
 import shindy.{EventSourced, SourcedCreation, SourcedUpdate}
@@ -20,6 +21,8 @@ import scala.language.{higherKinds, reflectiveCalls}
   * @tparam F Effect type
   */
 trait Hydrated[STATE, EVENT, A, F[_]] {
+  def map[B](f: A => B): Hydrated[STATE, EVENT, B, F]
+
   def state(eventStore: EventStore[STATE, EVENT, F]): F[Either[String, STATE]]
 
   def update[B](su: SourcedUpdate[STATE, EVENT, B]): Hydrated[STATE, EVENT, B, F] = update(_ => su)
@@ -31,12 +34,13 @@ trait Hydrated[STATE, EVENT, A, F[_]] {
 
 private[shindy] object Hydrated {
   def createNew[STATE, EVENT, F[_] : Monad](
-    sourcedCreation: SourcedCreation[STATE, EVENT, UUID]
+    sourcedCreation: SourcedCreation[STATE, EVENT, UUID],
+    stateSnapshotInterval: Option[Int] = None
   ): Hydrated[STATE, EVENT, UUID, F] = {
-    HydratedInt(Kleisli.pure(sourcedCreation.map(id => ResultWithIdAndVersion(id, id, None))))
+    HydratedInt(Kleisli.pure(sourcedCreation.map(id => ResultWithIdAndVersion(id, id, None))), stateSnapshotInterval)
   }
 
-  def hydrate[STATE, EVENT, F[_] : Monad](aggregateId: UUID)(
+  def hydrate[STATE, EVENT, F[_] : Monad](aggregateId: UUID, stateSnapshotInterval: Option[Int] = None)(
     implicit eventHandler: EventHandler[STATE, EVENT],
     streamCompiler: fs2.Stream.Compiler[F, F],
   ): Hydrated[STATE, EVENT, Unit, F] = {
@@ -45,38 +49,33 @@ private[shindy] object Hydrated {
       val versionMaybe = stateAndVersionMaybe.map(_._2)
       EventSourced.sourceState[STATE, EVENT](stateMaybe)
         .map(_ => ResultWithIdAndVersion((), aggregateId, versionMaybe.toOption))
-    })
+    }, stateSnapshotInterval)
   }
 
   private def loadState[STATE, EVENT, F[_]](aggregateId: UUID)(
     implicit eventHandler: EventHandler[STATE, EVENT],
     evCompiler: fs2.Stream.Compiler[F, F],
     evMonad: Monad[F]
-  ): Kleisli[F, EventStore[STATE, EVENT, F], Either[String, (STATE, Int)]] = Kleisli { eventStore: EventStore[STATE, EVENT, F] =>
-    // TODO Use snapshots
-    eventStore.loadEvents(aggregateId, Option.empty[Int]).fold(Option.empty[(STATE, Int)]) { case (s, event) =>
-      eventHandler.apply(s.map(_._1), event.event).some.map(_ -> event.version)
-    }.compile.toList.map(_.headOption.flatten)
-      .map(Either.fromOption(_, s"Unable to load state for the aggregate with ID=$aggregateId"))
+  ) = Kleisli { eventStore: EventStore[STATE, EVENT, F] =>
+    val stateWithVersionMaybe = for {
+      snapshotMaybe <- eventStore.loadLatestStateSnapshot(aggregateId)
+      computedState <- eventStore.loadEvents(aggregateId, Option.empty[Int])
+        .fold(snapshotMaybe) { case (s, event) =>
+          Some(eventHandler(s.map(_._1), event.event) -> event.version)
+        }.compile.toList.map(_.headOption.flatten)
+    } yield computedState
+    stateWithVersionMaybe.map(Either.fromOption(_, s"Unable to load state for the aggregate with ID=$aggregateId"))
   }
 
   private case class ResultWithIdAndVersion[A](out: A, aggregateId: UUID, aggregateInitVersion: Option[Int])
 
   private case class HydratedInt[STATE, EVENT, OUT, F[_] : Monad](
     scLoad: Kleisli[F, EventStore[STATE, EVENT, F], SourcedCreation[STATE, EVENT, ResultWithIdAndVersion[OUT]]],
+    stateSnapshotInterval: Option[Int]
   ) extends Hydrated[STATE, EVENT, OUT, F] {
 
-    private lazy val scPersist = scLoad.map(_.run).flatMap { maybeResults =>
-      Kleisli { evS: EventStore[STATE, EVENT, F] =>
-        maybeResults.traverse { case (events, state, r) =>
-          val versionedEvents = events.zip(Stream.from(r.aggregateInitVersion.map(_ + 1).getOrElse(0)))
-            .map(Function tupled VersionedEvent.apply)
-
-          // TODO Save state snapshot as well
-          evS.storeEvents(r.aggregateId, versionedEvents).map(_ => (r.aggregateId, state, r.out))
-        }
-      }
-    }
+    override def map[B](f: OUT => B): Hydrated[STATE, EVENT, B, F] =
+      copy(scLoad = scLoad.map(_.map(verOut => verOut.copy(out = f(verOut.out)))))
 
     override def update[B](f: OUT => SourcedUpdate[STATE, EVENT, B]): Hydrated[STATE, EVENT, B, F] = {
       val newScLoad = this.scLoad.map { sc =>
@@ -88,7 +87,31 @@ private[shindy] object Hydrated {
     override def state(eventStore: EventStore[STATE, EVENT, F]): F[Either[String, STATE]] =
       scLoad.apply(eventStore).map(_.state)
 
-    override def persist(store: EventStore[STATE, EVENT, F]): F[Either[String, (UUID, STATE, OUT)]] =
-      scPersist(store)
+    override def persist(store: EventStore[STATE, EVENT, F]): F[Either[String, (UUID, STATE, OUT)]] = {
+      val scPersist = scLoad.map(_.run).flatMap { maybeResults =>
+        Kleisli { evS: EventStore[STATE, EVENT, F] =>
+          maybeResults.traverse { case (events, state, r) =>
+            val aggInitialVersion = r.aggregateInitVersion.map(_ + 1).getOrElse(0)
+            val versionedEvents = events.zip(Stream.from(aggInitialVersion))
+              .map(Function tupled VersionedEvent.apply)
+
+            val conditionallyStoreSnapshot = versionedEvents.lastOption.map(_.version)
+              .flatMap { lastEventVersion =>
+                stateSnapshotInterval
+                  .map(_ + aggInitialVersion)
+                  .filter(_ <= lastEventVersion)
+                  .map { _ =>
+                    evS.storeSnapshot(r.aggregateId, state, lastEventVersion)
+                  }
+              }.getOrElse(Monad[F].pure(0))
+
+            evS.storeEvents(r.aggregateId, versionedEvents).map(_ => (r.aggregateId, state, r.out)).flatMap { out =>
+              conditionallyStoreSnapshot.map(_ => out)
+            }
+          }
+        }
+      }
+      scPersist.apply(store)
+    }
   }
 }
