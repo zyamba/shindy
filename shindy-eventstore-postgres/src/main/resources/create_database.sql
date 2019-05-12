@@ -23,6 +23,14 @@ CREATE TABLE IF NOT EXISTS event
     REFERENCES aggregate_schema (aggregate_id)
 );
 
+CREATE TABLE IF NOT EXISTS state_snapshot
+(
+  aggregate_id      UUID      PRIMARY KEY,
+  aggregate_version integer   NOT NULL,
+  state_snapshot    JSONB     NOT NULL,
+  create_time       TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
 -- this will ensure there is no branching occur for the aggregate and also provides ordering
 -- when query for specific aggregate events
 CREATE UNIQUE INDEX IF NOT EXISTS event_ordering on event (aggregate_id, aggregate_version);

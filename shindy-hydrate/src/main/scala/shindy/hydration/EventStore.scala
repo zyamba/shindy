@@ -20,5 +20,5 @@ trait EventStore[STATE, EVENT, F[_]] {
     */
   def loadLatestStateSnapshot(aggregateId: UUID): F[Option[(STATE, Int)]]
 
-  def storeSnapshot(aggregateId: UUID, state: STATE, version: Int): F[Unit]
+  def storeSnapshot(aggregateId: UUID, state: STATE, version: Int): F[Int]
 }
