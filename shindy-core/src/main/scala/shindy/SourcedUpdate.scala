@@ -87,21 +87,15 @@ case class SourcedUpdate[STATE, +EVENT, A](
   /**
     * Compose two `SourceUpdate` into one
     */
-  def andThen[E >: EVENT, B](other: SourcedUpdate[STATE, E, B]): SourcedUpdate[STATE, E, B] = {
+  def andThen[E >: EVENT, B](other: SourcedUpdate[STATE, E, B]): SourcedUpdate[STATE, E, B] =
     andThen[E, B]((_: A) => other)
-  }
 
   /**
     * Compose two `SourceUpdate` into one
     */
-  def andThen[E >: EVENT, B](other: A => SourcedUpdate[STATE, E, B]): SourcedUpdate[STATE, E, B] = {
-    SourcedUpdate {
-      this.adaptEvent[E].run.flatMap(other(_).run)
-    }
-  }
+  def andThen[E >: EVENT, B](other: A => SourcedUpdate[STATE, E, B]): SourcedUpdate[STATE, E, B] =
+    SourcedUpdate(this.adaptEvent[E].run.flatMap(other(_).run))
 
-  private[shindy] def tell[E >: EVENT](event: E): SourcedUpdate[STATE, E, A] = {
-    val contraRun = this.run.transform[Vector[E], STATE, A]((ev, s, a) => (ev, s, a))
-    SourcedUpdate(contraRun.tell(Vector(event)))
-  }
+  private[shindy] def tell[E >: EVENT](event: E): SourcedUpdate[STATE, E, A] =
+    SourcedUpdate(this.adaptEvent[E].run.tell(Vector(event)))
 }
