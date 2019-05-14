@@ -49,10 +49,10 @@ jobs:
             cat /dev/null | sbt clean coverage test:test coverageReport coverageAggregate
 
       - store_test_results:
-          path: target/scala-*/coverage-report
+          path: target/scala-2.12/coverage-report
 
       - store_artifacts:
-          path: target/scala-*/scoverage-report
+          path: target/scala-2.12/scoverage-report
 
       - run:
           name: Format coverage report
