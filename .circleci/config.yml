@@ -33,7 +33,6 @@ jobs:
             # download test reporter as a static binary
             curl -L https://codeclimate.com/downloads/test-reporter/test-reporter-latest-linux-amd64 > ./cc-test-reporter
             chmod +x ./cc-test-reporter
-      - run: cat /dev/null | sbt test:compile
 
       # fetch dependencies
       - run: cat /dev/null | sbt test:compile
@@ -45,9 +44,9 @@ jobs:
           key: v2-dependencies-{{ checksum "project/Dependencies.scala" }}
 
       - run:
-        name: Run tests
-        command: |
-          cat /dev/null | sbt clean coverage test:test coverageReport coverageAggregate
+          name: Run tests
+          command: |
+            cat /dev/null | sbt clean coverage test:test coverageReport coverageAggregate
 
       - store_test_results:
         path: target/report
@@ -59,11 +58,11 @@ jobs:
         path: target/scala-*/scoverage-report
 
       - run:
-        name: Format coverage report
-        command: |
-          ./cc-test-reporter format-coverage target/scala-*/coverage-report/cobertura.xml --input-type=cobertura
+          name: Format coverage report
+          command: |
+            ./cc-test-reporter format-coverage target/scala-*/coverage-report/cobertura.xml --input-type=cobertura
 
       - run:
-        name: Upload coverage report
-        command: |
-          ./cc-test-reporter upload-coverage
+          name: Upload coverage report
+          command: |
+            ./cc-test-reporter upload-coverage
