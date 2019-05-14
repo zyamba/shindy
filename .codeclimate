@@ -1,0 +1,8 @@
+prepare:
+  fetch:
+    - "https://raw.githubusercontent.com/paypal/scala-style-guide/develop/scalastyle-config.xml"
+plugins:
+  scalastyle:
+    enabled: true
+exclude_patterns:
+  - "**/test/src/"
