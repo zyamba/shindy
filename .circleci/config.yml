@@ -8,8 +8,8 @@ jobs:
       - image: circleci/postgres:9.6.2-alpine
         environment:
           POSTGRES_USER: eventstore
-          POSTGRES_DB: eventstore
-          POSTGRES_PASSWORD: eventstore
+          POSTGRES_DB: es
+          POSTGRES_PASSWORD: essecret
 
     working_directory: ~/repo
 
@@ -17,6 +17,9 @@ jobs:
       CC_TEST_REPORTER_ID: "f98d0e5c96a269fe86727790a94589b5a931354cee8f0a073de43e150c35cc30"
       JVM_OPTS: -Xmx256m
       TERM: dumb
+      PG_DB: eventstore
+      PG_USER: es
+      PG_PASSWORD: essecret
 
     steps:
       - checkout
@@ -46,7 +49,7 @@ jobs:
       - run:
           name: Run tests
           command: |
-            cat /dev/null | sbt clean coverage test:test coverageReport coverageAggregate
+            cat /dev/null | sbt clean coverage test:test db:test coverageReport coverageAggregate
 
       - store_test_results:
           path: target/scala-2.12/coverage-report
