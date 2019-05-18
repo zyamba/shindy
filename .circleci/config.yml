@@ -8,7 +8,7 @@ jobs:
       - image: circleci/postgres:9.6.2-alpine
         environment:
           POSTGRES_USER: eventstore
-          POSTGRES_DB: es
+          POSTGRES_DB: eventstore
           POSTGRES_PASSWORD: essecret
 
     working_directory: ~/repo
@@ -18,7 +18,7 @@ jobs:
       JVM_OPTS: -Xmx256m
       TERM: dumb
       PG_DB: eventstore
-      PG_USER: es
+      PG_USER: eventstore
       PG_PASSWORD: essecret
 
     steps:
