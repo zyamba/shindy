@@ -1,12 +1,15 @@
 package shindy.eventstore.postgres
 
-import java.sql.Timestamp
+import java.sql.{Connection, Timestamp}
 import java.time.{LocalDate, ZoneId}
 import java.util.{Calendar, UUID}
 
+import cats.Eval
+import cats.data.Kleisli
 import cats.effect.{ContextShift, IO}
 import doobie._
 import doobie.scalatest.IOChecker
+import doobie.util.transactor.Transactor.Aux
 import io.circe.generic.auto._
 import io.circe.syntax._
 import org.scalacheck.Arbitrary.arbitrary
@@ -51,20 +54,33 @@ class StoreTest extends FreeSpec
 
   implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
 
-  override def transactor: Transactor[IO] = {
+  private val executeCreateDbScript = Kleisli[IO, Connection, Unit] { connection: Connection =>
+    IO {
+      val is = getClass.getResourceAsStream("/create_database.sql")
+      try {
+        val sql = scala.io.Source.fromInputStream(is, "UTF-8").mkString
+        connection.prepareStatement(sql).execute()
+      } finally {
+        is.close()
+      }
+    }
+  }
 
+  private val transactorEval: Eval[Aux[IO, Unit]] = Eval.later {
     implicit val configReader: ConfigReader[DatabaseConfig] = deriveReader[DatabaseConfig]
     val dbConf = pureconfig.loadConfigOrThrow[DatabaseConfig]("db")
 
-    Transactor.fromDriverManager[IO](
+    val tx = Transactor.fromDriverManager[IO](
       "org.postgresql.Driver",
       dbConf.jdbcUrl,
       dbConf.username,
       dbConf.password
     )
+    tx.exec.apply(executeCreateDbScript).unsafeRunAsyncAndForget()
+    tx
   }
 
-
+  override def transactor: Transactor[IO] = transactorEval.value
 
   "Methods tests" - {
 
