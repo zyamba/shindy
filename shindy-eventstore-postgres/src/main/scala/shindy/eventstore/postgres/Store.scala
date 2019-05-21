@@ -80,8 +80,6 @@ class Store[STATE: Decoder : Encoder, EVENT: Decoder : Encoder, M[_]](aggregateT
       decodeFromJson[STATE](lastSnapshot.stateSnapshot) -> lastSnapshot.version
     }.option.transact(xa)
 
-  // todo implement snapshot support
-
   override def storeSnapshot(aggregateId: UUID, state: STATE, version: Int): M[Int] = {
     insertState(aggregateId, version, state.asJson).run.transact(xa)
   }
