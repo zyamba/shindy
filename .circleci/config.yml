@@ -5,12 +5,21 @@ jobs:
   build:
     docker:
       - image: circleci/openjdk:8-jdk
+      - image: circleci/postgres:9.6.2-alpine
+        environment:
+          POSTGRES_USER: eventstore
+          POSTGRES_DB: eventstore
+          POSTGRES_PASSWORD: essecret
 
     working_directory: ~/repo
 
     environment:
+      CC_TEST_REPORTER_ID: "f98d0e5c96a269fe86727790a94589b5a931354cee8f0a073de43e150c35cc30"
       JVM_OPTS: -Xmx256m
       TERM: dumb
+      PG_DB: eventstore
+      PG_USER: eventstore
+      PG_PASSWORD: essecret
 
     steps:
       - checkout
@@ -18,17 +27,42 @@ jobs:
       # Download and cache dependencies
       - restore_cache:
           keys:
-            - v2-dependencies-{{ checksum "build.sbt" }}
+            - v2-dependencies-{{ checksum "project/Dependencies.scala" }}
             # fallback to using the latest cache if no exact match is found
             - v2-dependencies-
+      - run:
+          name: Setup Code Climate test-reporter
+          command: |
+            # download test reporter as a static binary
+            curl -L https://codeclimate.com/downloads/test-reporter/test-reporter-latest-linux-amd64 > ./cc-test-reporter
+            chmod +x ./cc-test-reporter
 
+      # fetch dependencies
       - run: cat /dev/null | sbt test:compile
 
       - save_cache:
           paths:
             - ~/.ivy2
             - ~/.sbt
-          key: v2-dependencies-{{ checksum "build.sbt" }}
+          key: v2-dependencies-{{ checksum "project/Dependencies.scala" }}
 
-      # run tests!
-      - run: cat /dev/null | sbt test:test
+      - run:
+          name: Run tests
+          command: |
+            cat /dev/null | sbt clean coverage test:test db:test coverageReport coverageAggregate
+
+      - store_test_results:
+          path: target/scala-2.12/coverage-report
+
+      - store_artifacts:
+          path: target/scala-2.12/scoverage-report
+
+      - run:
+          name: Format coverage report
+          command: |
+            ./cc-test-reporter format-coverage target/scala-*/coverage-report/cobertura.xml --input-type=cobertura
+
+      - run:
+          name: Upload coverage report
+          command: |
+            ./cc-test-reporter upload-coverage

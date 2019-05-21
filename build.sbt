@@ -1,17 +1,22 @@
+import Dependencies._
+import sbt.Keys.testOptions
+import sbt.Tests
+
 inThisBuild(
   List(
     organization := "io.github.zyamba",
     organizationName := "zyamba",
     organizationHomepage := Some(url("https://github.com/zyamba")),
-    scalaVersion := "2.12.6",
+    scalaVersion := "2.12.8",
 
     addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.8"),
 
     scalacOptions ++= Seq("-deprecation", "-feature"),
 
     libraryDependencies ++= Seq(
-      "org.scalactic" %% "scalactic" % "3.0.5" % Test,
-      "org.scalatest" %% "scalatest" % "3.0.5" % Test
+      scalactic % Test,
+      scalatest % Test,
+      scalacheck % Test
     ),
 
     scmInfo := Some(
@@ -46,19 +51,46 @@ ThisBuild / publishMavenStyle := true
 
 ThisBuild / releasePublishArtifactsAction := PgpKeys.publishSigned.value
 
-val examples = project in file("examples") settings(
-  skip in publish := true,
+val DbTests = config("db").extend(Test)
+configs(DbTests)
+
+lazy val dbTestsCommonSettings = inConfig(DbTests)(Defaults.testTasks) ++ Seq(
+  testOptions in Test := Tests.Argument("-l", "DatabaseTest") :: Nil,
+  testOptions in DbTests := Tests.Argument("-n", "DatabaseTest") :: Nil
 )
-val `shindy-core` = project in file("shindy-core") settings (
+
+lazy val `shindy-core` = project settings (
   libraryDependencies ++= Seq(
-    "org.typelevel" %% "cats-core" % "1.5.0-RC1",
-    "co.fs2" %% "fs2-core" % "1.0.0",
-    //  "co.fs2" %% "fs2-io" % "1.0.0",
-    "org.typelevel" %% "cats-effect" % "1.0.0" % Test,
+    `cats-core`,
+    `fs2-core`
   )
 )
 
-val root = project in file(".") settings(
+lazy val examples = project settings(
+  skip in publish := true,
+) dependsOn `shindy-core`
+
+lazy val `shindy-hydrate` = project settings (
+  libraryDependencies ++= Seq()
+) dependsOn (`shindy-core`, examples % Test)
+
+lazy val `shindy-eventstore-postgres` = project.configs(DbTests).settings (
+  dbTestsCommonSettings,
+  libraryDependencies ++= Seq(
+    `circe-core`,
+    `circe-parser`,
+    `circe-generic`,
+    `fs2-core`,
+    postgresJdbcDriver,
+    `doobie-postgres`,
+    `doobie-hikari`,
+    `doobie-scalatest` % Test,
+    pureconfig % Test
+  ),
+  dependencyOverrides += hikariCp
+).dependsOn(`shindy-hydrate`, examples % Test)
+
+lazy val root = project in file(".") settings(
   name := "shindy",
   skip in publish := true,
-) aggregate(`shindy-core`, examples)
+) aggregate(`shindy-core`, `shindy-hydrate`, `shindy-eventstore-postgres`, examples)
