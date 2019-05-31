@@ -57,6 +57,12 @@ jobs:
 
       - store_artifacts:
           path: target/scala-2.12/scoverage-report
+          
+      - run:
+          name: Codecov report
+          command: |
+            bash <(curl -s https://codecov.io/bash)
+        
 
       - run:
           name: Format coverage report
