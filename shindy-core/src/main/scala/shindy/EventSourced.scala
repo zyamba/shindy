@@ -5,6 +5,7 @@ import cats.data.ReaderWriterStateT
 import cats.instances.either._
 
 import scala.language.reflectiveCalls
+import scala.reflect.ClassTag
 
 object EventSourced {
   type EventHandler[S, E] = (Option[S], E) => S
@@ -63,11 +64,30 @@ object EventSourced {
     * @param predicate State predicate
     * @param sourcedUpdate Conditional operation
     */
-  def when[STATE, EVENT, B](predicate: STATE => Boolean, sourcedUpdate: SourcedUpdate[STATE, EVENT, B]):SourcedUpdate[STATE, EVENT, Option[B]] = {
-    val pureNop = SourcedUpdate.pure[STATE, EVENT](Option.empty[B])
-    pureNop.inspect(predicate).flatMap {
+  def when[STATE, EVENT, B](
+    predicate: STATE => Boolean,
+    sourcedUpdate: SourcedUpdate[STATE, EVENT, B]
+  ): SourcedUpdate[STATE, EVENT, Option[B]] = {
+    val nop: SourcedUpdate[STATE, EVENT, Option[B]] = SourcedUpdate.pure(None)
+    nop.inspect(predicate).flatMap {
       case true => sourcedUpdate.map(Some.apply)
-      case false => pureNop
+      case false => nop
+    }
+  }
+
+  /**
+    * Conditionally execute given update if the current state of type [[S]]
+    *
+    * @param up Conditional update operation
+    * @tparam S Expected state of the state machine
+    */
+  def when[STATE, S <: STATE, EVENT, B](
+    up: S => SourcedUpdate[STATE, EVENT, B]
+  )(implicit ct: ClassTag[S]): SourcedUpdate[STATE, EVENT, Option[B]] = {
+    val nop: SourcedUpdate[STATE, EVENT, Option[B]] = SourcedUpdate.pure(None)
+    nop.inspect(identity).flatMap {
+      case s: S => up(s).map(Option.apply)
+      case _ => nop
     }
   }
 
