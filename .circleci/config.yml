@@ -17,6 +17,7 @@ jobs:
       CC_TEST_REPORTER_ID: "f98d0e5c96a269fe86727790a94589b5a931354cee8f0a073de43e150c35cc30"
       JVM_OPTS: -Xmx256m
       TERM: dumb
+      CODECOV_TOKEN: "e9457e37-4ff6-417c-b52a-3fbe41652669"
       PG_DB: eventstore
       PG_USER: eventstore
       PG_PASSWORD: essecret
@@ -56,6 +57,12 @@ jobs:
 
       - store_artifacts:
           path: target/scala-2.12/scoverage-report
+          
+      - run:
+          name: Codecov report
+          command: |
+            bash <(curl -s https://codecov.io/bash)
+        
 
       - run:
           name: Format coverage report
