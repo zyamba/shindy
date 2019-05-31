@@ -1,7 +1,10 @@
 # shindy
 [![CircleCI](https://circleci.com/gh/zyamba/shindy.svg?style=shield&circle-token=64e321432a5ce4e96a85cb9e02af5605155131af)](https://circleci.com/gh/zyamba/shindy)
+[![codecov](https://codecov.io/gh/zyamba/shindy/branch/master/graph/badge.svg)](https://codecov.io/gh/zyamba/shindy)
 [![Maintainability](https://api.codeclimate.com/v1/badges/1b81990fd51dbe537474/maintainability)](https://codeclimate.com/github/zyamba/shindy/maintainability)
 [![Test Coverage](https://api.codeclimate.com/v1/badges/1b81990fd51dbe537474/test_coverage)](https://codeclimate.com/github/zyamba/shindy/test_coverage)
+
+
 
 Lightweight Composible Event Sourcing library for Scala.
 
