@@ -229,6 +229,31 @@ class EventSourcedSpec extends FreeSpec with Matchers {
       runResult should be('left)
       runResult.left.get should include(errMessage)
     }
+
+    "should fail if error is sourced" in {
+      val errMessage = "Error sourced"
+      val errSourced: SourcedUpdate[UserRecord, UserRecordChangeEvent, Option[Unit]] = whenStateIs {
+        _: UserRecordActive => SourcedUpdate.error(errMessage)
+      }
+
+      val userRecordState = UserRecordActive(UUID.randomUUID(), "test@test.com")
+      val runResult = errSourced.run(userRecordState)
+      runResult should be('left)
+      runResult.left.get should include(errMessage)
+    }
+
+    "should be able to inspect state" in {
+      val inspectEmail: SourcedUpdate[UserRecord, UserRecordChangeEvent, Option[String]] =
+        SourcedUpdate.pure(()).inspect {
+          case e: UserRecordActive => Some(e.email)
+          case _ => None
+        }
+
+      val userRecordState = UserRecordActive(UUID.randomUUID(), "test@test.com")
+      val runResult = inspectEmail.run(userRecordState)
+      runResult should be('right)
+      runResult.right.get._3 shouldEqual Option(userRecordState.email)
+    }
   }
 
   "EventHandler" - {
