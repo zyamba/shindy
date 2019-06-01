@@ -3,6 +3,7 @@ package shindy
 import cats.Eval
 import cats.data.ReaderWriterStateT
 import cats.instances.either._
+import cats.syntax.option._
 
 import scala.language.reflectiveCalls
 import scala.reflect.ClassTag
@@ -64,15 +65,15 @@ object EventSourced {
     * @param predicate State predicate
     * @param sourcedUpdate Conditional operation
     */
-  def when[STATE, EVENT, B](
-    predicate: STATE => Boolean,
+  def when[STATE, S <: STATE : ClassTag, EVENT, B](
+    predicate: S => Boolean,
     sourcedUpdate: SourcedUpdate[STATE, EVENT, B]
   ): SourcedUpdate[STATE, EVENT, Option[B]] = {
-    val nop: SourcedUpdate[STATE, EVENT, Option[B]] = SourcedUpdate.pure(None)
-    nop.inspect(predicate).flatMap {
-      case true => sourcedUpdate.map(Some.apply)
-      case false => nop
+    val condUpdate: S => SourcedUpdate[STATE, EVENT, Option[B]] = {
+      case s: S if predicate(s) => sourcedUpdate.map(_.some)
+      case _ => SourcedUpdate.pure(None)
     }
+    whenStateIs(condUpdate).map(_.flatten)
   }
 
   /**
@@ -81,11 +82,11 @@ object EventSourced {
     * @param up Conditional update operation
     * @tparam S Expected state of the state machine
     */
-  def when[STATE, S <: STATE, EVENT, B](
+  def whenStateIs[STATE, S <: STATE : ClassTag, EVENT, B](
     up: S => SourcedUpdate[STATE, EVENT, B]
-  )(implicit ct: ClassTag[S]): SourcedUpdate[STATE, EVENT, Option[B]] = {
+  ): SourcedUpdate[STATE, EVENT, Option[B]] = {
     val nop: SourcedUpdate[STATE, EVENT, Option[B]] = SourcedUpdate.pure(None)
-    nop.inspect(identity).flatMap {
+    nop.get.flatMap {
       case s: S => up(s).map(Option.apply)
       case _ => nop
     }

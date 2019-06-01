@@ -84,7 +84,7 @@ class StoreTest extends FreeSpec
 
   "Methods tests" - {
 
-    val store = Store.newStore(transactor)
+    lazy val store = Store.newStore(transactor)
       .forAggregate[UserRecord, UserRecordChangeEvent]("UserAggregate")
 
 

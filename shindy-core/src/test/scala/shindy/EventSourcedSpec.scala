@@ -13,23 +13,11 @@ import scala.language.{postfixOps, reflectiveCalls}
 private object BusinessDomain {
 
   // state
-  sealed trait UserRecord {
-    def id: UUID
-
-    def email: String
-
-    def birthdate: Option[LocalDate]
-  }
+  sealed trait UserRecord
 
   sealed case class UserRecordActive(id: UUID, email: String, birthdate: Option[LocalDate] = None) extends UserRecord
 
-  sealed case class UserRecordInactive(suspended: UserRecordActive) extends UserRecord {
-    override def id: UUID = suspended.id
-
-    override def email: String = suspended.email
-
-    override def birthdate: Option[LocalDate] = suspended.birthdate
-  }
+  sealed case class UserRecordInactive(suspended: UserRecordActive) extends UserRecord
 
   // events
   sealed trait UserRecordChangeEvent extends Product with Serializable
@@ -102,7 +90,7 @@ class EventSourcedSpec extends FreeSpec with Matchers {
       events should have size 1
       events.head shouldEqual EmailUpdated(updEmail)
 
-      state.email shouldEqual updEmail
+      state.asInstanceOf[UserRecordActive].email shouldEqual updEmail
     }
 
     "should report domain errors" in {
@@ -119,7 +107,7 @@ class EventSourcedSpec extends FreeSpec with Matchers {
       val happyBirthdayMsg = "Happy Birthday"
       val conditionalUpdate =
         when(
-          (user: UserRecord) => user.birthdate.isDefined,
+          (user: UserRecordActive) => user.birthdate.isDefined,
           updateEmail(happyBirthdayEmail).map(_ => happyBirthdayMsg)
         )
 
@@ -142,7 +130,7 @@ class EventSourcedSpec extends FreeSpec with Matchers {
         val (events, state, out) = results.right.get
         events should have size 1
         events.head shouldEqual EmailUpdated(happyBirthdayEmail)
-        state.email shouldEqual happyBirthdayEmail
+        state.asInstanceOf[UserRecordActive].email shouldEqual happyBirthdayEmail
         out shouldBe Some(happyBirthdayMsg)
       }
 
@@ -153,7 +141,7 @@ class EventSourcedSpec extends FreeSpec with Matchers {
 
       val output = "Success"
       val updatedEmail = "updated@test.com"
-      val condOp = when((_: UserRecordActive) => {
+      val condOp = whenStateIs((_: UserRecordActive) => {
         updateEmail(updatedEmail).map(_ => output)
       })
 
@@ -162,7 +150,7 @@ class EventSourcedSpec extends FreeSpec with Matchers {
 
       val (ev, u, out) = runTrue.right.get
       ev should have size 1
-      u.email shouldEqual updatedEmail
+      u.asInstanceOf[UserRecordActive].email shouldEqual updatedEmail
       out shouldEqual Some(output)
 
     }
@@ -171,16 +159,17 @@ class EventSourcedSpec extends FreeSpec with Matchers {
       val inactiveUser = UserRecordInactive(UserRecordActive(UUID.randomUUID(), "test@test.com"))
 
       val updatedEmail = "updated@test.com"
-      val condOp = when((_: UserRecordActive) => {
-        updateEmail(updatedEmail).map(_ => "should not happen")
-      })
+      val condOp = whenStateIs(
+        (_: UserRecordActive) => {
+          updateEmail(updatedEmail).map(_ => "should not happen")
+        })
 
       val runFalse = condOp.run(inactiveUser)
       runFalse should be('right)
 
       val (ev, u, out) = runFalse.right.get
       ev should be('empty)
-      u.email should not equal updatedEmail
+      u.asInstanceOf[UserRecordInactive].suspended.email should not equal updatedEmail
       out shouldEqual None
     }
 

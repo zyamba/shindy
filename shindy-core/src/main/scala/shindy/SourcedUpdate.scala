@@ -64,6 +64,11 @@ case class SourcedUpdate[STATE, +EVENT, A](
   def inspect[B](f: STATE => B): SourcedUpdate[STATE, EVENT, B] = SourcedUpdate(this.run.inspect(f))
 
   /**
+    * Return current state.
+    */
+  def get: SourcedUpdate[STATE, EVENT, STATE] = SourcedUpdate(this.run.get)
+
+  /**
     * Run this program with given initial state and return collected events
     *
     * @param initialState starting state
