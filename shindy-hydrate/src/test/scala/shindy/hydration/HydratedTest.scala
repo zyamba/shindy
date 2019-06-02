@@ -141,7 +141,7 @@ class HydratedTest extends FreeSpec with Matchers with Hydration[UserRecord, Use
           val scUp = sc.update(updateEmail(s"updated_$n@test.com").map(_ => ()))
           scUp
         }
-        allOps.persist(eventStore).unsafeRunSync()
+        persist(allOps, eventStore).unsafeRunSync()
 
         val snapshot = eventStore.loadLatestStateSnapshot(initialState.id)
           .unsafeRunSync()
@@ -160,7 +160,8 @@ class HydratedTest extends FreeSpec with Matchers with Hydration[UserRecord, Use
           val scUp = sc.update(updateEmail(s"updated_$n@test.com").map(_ => ()))
           scUp
         }
-        allOps.persist(eventStore).unsafeRunSync()
+
+        persist(allOps, eventStore).unsafeRunSync()
 
         val snapshot = eventStore.loadLatestStateSnapshot(initialState.id)
           .unsafeRunSync()
