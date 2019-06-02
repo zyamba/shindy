@@ -62,6 +62,13 @@ class HydratedTest extends FreeSpec with Matchers with Hydration[UserRecord, Use
   "Methods tests" - {
     val eventStore: EventStore[UserRecord, UserRecordChangeEvent, IO] = new InMemoryEventStore()
 
+    "snapshots should be disabled by default" in {
+      object UserHydration extends Hydration[UserRecord, UserRecordChangeEvent]{
+        override def stateSnapshotInterval: Option[Int] = super.stateSnapshotInterval
+      }
+      UserHydration.stateSnapshotInterval shouldEqual None
+    }
+
     "hydrate" in {
       val userId = UUID.randomUUID()
       val birthdate = LocalDate.of(2000, 1, 1)
