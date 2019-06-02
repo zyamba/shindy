@@ -1,18 +1,37 @@
 package shindy.hydration
 
-import java.time.LocalDate
-import java.util.UUID
+import java.time.{LocalDate, ZoneId}
+import java.util.{Calendar, UUID}
 
 import cats.effect.IO
+import org.scalacheck.{Arbitrary, Gen}
+import org.scalacheck.Arbitrary.arbitrary
+import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import org.scalatest.{FreeSpec, Matchers}
+import shindy.SourcedCreation
 import shindy.examples.UserService._
 
 import scala.Function.tupled
 import scala.collection.mutable
 
-class HydratedTest extends FreeSpec with Matchers with Hydration[UserRecord, UserRecordChangeEvent] {
+import scala.language.reflectiveCalls
 
-  class InMemoryEventDatabase(
+class HydratedTest extends FreeSpec with Matchers with Hydration[UserRecord, UserRecordChangeEvent]
+  with GeneratorDrivenPropertyChecks {
+
+  private val snapshotInterval = 100
+
+  override protected val stateSnapshotInterval: Option[Int] = Some(snapshotInterval)
+
+  private val userRecGen = for {
+    id <- arbitrary[UUID]
+    email <- Gen.alphaStr.suchThat(_.nonEmpty).map(_ + "@test.com")
+    arbDate <- Gen.option(arbitrary[Calendar].map(_.toInstant.atZone(ZoneId.systemDefault())).map(_.toLocalDate))
+  } yield UserRecord(id, email, arbDate)
+
+  implicit val arbUserRecGen: Arbitrary[UserRecord] = Arbitrary(userRecGen)
+
+  class InMemoryEventStore(
     val eventsStore: mutable.Map[UUID, Vector[VersionedEvent[UserRecordChangeEvent]]] = mutable.Map.empty,
     val stateSnapshot: mutable.Map[UUID, (UserRecord, Int)] = mutable.Map.empty
   )
@@ -41,7 +60,15 @@ class HydratedTest extends FreeSpec with Matchers with Hydration[UserRecord, Use
   }
 
   "Methods tests" - {
-    val eventStore: EventStore[UserRecord, UserRecordChangeEvent, IO] = new InMemoryEventDatabase()
+    val eventStore: EventStore[UserRecord, UserRecordChangeEvent, IO] = new InMemoryEventStore()
+
+    "snapshots should be disabled by default" in {
+      object UserHydration extends Hydration[UserRecord, UserRecordChangeEvent]{
+        override def stateSnapshotInterval: Option[Int] = super.stateSnapshotInterval
+      }
+      UserHydration.stateSnapshotInterval shouldEqual None
+    }
+
     "hydrate" in {
       val userId = UUID.randomUUID()
       val birthdate = LocalDate.of(2000, 1, 1)
@@ -95,7 +122,12 @@ class HydratedTest extends FreeSpec with Matchers with Hydration[UserRecord, Use
       state.email shouldBe "updated@email.com"
 
       val results = eventStore.loadEvents(id).compile.toList unsafeRunSync()
-      println(results)
+      results should not be empty
+      results.map(_.version) shouldEqual results.indices.toList
+      results.map(_.event) should contain theSameElementsInOrderAs Seq(
+        UserCreated(userId, "test@test.com"),
+        EmailUpdated("updated@email.com")
+      )
     }
 
     "attempt to load non existent aggregate should report errors" in {
@@ -106,6 +138,45 @@ class HydratedTest extends FreeSpec with Matchers with Hydration[UserRecord, Use
 
       an [Exception] shouldBe thrownBy (nonExistentRecord.state(eventStore).unsafeRunSync())
       an [Exception] shouldBe thrownBy (nonExistentRecord.persist(eventStore).unsafeRunSync())
+    }
+
+    "persist should trigger snapshot if snapshot interval not exceeded" in {
+      forAll { initialState: UserRecord =>
+        val initial: SourcedCreation[UserRecord, UserRecordChangeEvent, UUID] =
+          createUser(initialState.id, initialState.email)
+        val allOps = (1 until snapshotInterval).foldLeft(createNew[IO](initial).map(_ => ())) { (sc, n) =>
+          val scUp = sc.update(updateEmail(s"updated_$n@test.com").map(_ => ()))
+          scUp
+        }
+        persist(allOps, eventStore).unsafeRunSync()
+
+        val snapshot = eventStore.loadLatestStateSnapshot(initialState.id)
+          .unsafeRunSync()
+        snapshot shouldNot be('defined)
+
+        val events = eventStore.loadEvents(initialState.id).compile.toList.unsafeRunSync()
+        events should not be empty
+      }
+    }
+
+    "persist should trigger snapshot if snapshot interval exceeded" in {
+      forAll { initialState: UserRecord =>
+        val initial: SourcedCreation[UserRecord, UserRecordChangeEvent, UUID] =
+          createUser(initialState.id, initialState.email)
+        val allOps = (1 to snapshotInterval).foldLeft(createNew[IO](initial).map(_ => ())) { (sc, n) =>
+          val scUp = sc.update(updateEmail(s"updated_$n@test.com").map(_ => ()))
+          scUp
+        }
+
+        persist(allOps, eventStore).unsafeRunSync()
+
+        val snapshot = eventStore.loadLatestStateSnapshot(initialState.id)
+          .unsafeRunSync()
+        snapshot should be('defined)
+
+        val events = eventStore.loadEvents(initialState.id).compile.toList.unsafeRunSync()
+        events should not be empty
+      }
     }
   }
 }
