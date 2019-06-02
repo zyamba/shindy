@@ -1,7 +1,7 @@
 package shindy.eventstore.postgres
 
-import java.sql.{Connection, Timestamp}
-import java.time.{LocalDate, ZoneId}
+import java.sql.Connection
+import java.time.ZoneId
 import java.util.{Calendar, UUID}
 
 import cats.Eval
@@ -132,6 +132,9 @@ class StoreTest extends FreeSpec
         val snapshot = store.loadLatestStateSnapshot(initialState.id)
           .unsafeRunSync()
         snapshot shouldNot be('defined)
+
+        val events = store.loadEvents(initialState.id).compile.toList.unsafeRunSync()
+        events should not be empty
       }
     }
 
@@ -148,6 +151,9 @@ class StoreTest extends FreeSpec
         val snapshot = store.loadLatestStateSnapshot(initialState.id)
           .unsafeRunSync()
         snapshot should be('defined)
+
+        val events = store.loadEvents(initialState.id).compile.toList.unsafeRunSync()
+        events should not be empty
       }
     }
 
@@ -175,9 +181,5 @@ class StoreTest extends FreeSpec
     }
   }
 
-  /**
-    * Indicates least number of events that need to be produced in order to store a snapshot.
-    * By default state snapshots are disabled.
-    */
   override protected def stateSnapshotInterval: Option[Int] = Some(snapshotInterval)
 }
