@@ -8,12 +8,11 @@ import org.scalacheck.{Arbitrary, Gen}
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
 import org.scalatest.{FreeSpec, Matchers}
-import shindy.SourcedCreation
+import shindy.{SourcedCreation, SourcedUpdate}
 import shindy.examples.UserService._
 
 import scala.Function.tupled
 import scala.collection.mutable
-
 import scala.language.reflectiveCalls
 
 class HydratedTest extends FreeSpec with Matchers with Hydration[UserRecord, UserRecordChangeEvent]
@@ -161,21 +160,33 @@ class HydratedTest extends FreeSpec with Matchers with Hydration[UserRecord, Use
 
     "persist should trigger snapshot if snapshot interval exceeded" in {
       forAll { initialState: UserRecord =>
-        val initial: SourcedCreation[UserRecord, UserRecordChangeEvent, UUID] =
-          createUser(initialState.id, initialState.email)
-        val allOps = (1 to snapshotInterval).foldLeft(createNew[IO](initial).map(_ => ())) { (sc, n) =>
-          val scUp = sc.update(updateEmail(s"updated_$n@test.com").map(_ => ()))
-          scUp
-        }
+        val initial = createUser(initialState.id, initialState.email)
 
-        persist(allOps, eventStore).unsafeRunSync()
+        val allOps = (1 until snapshotInterval).foldLeft(SourcedUpdate.pure[UserRecord, UserRecordChangeEvent]()) { (sc, n) =>
+          val scUp = sc.andThen(updateEmail(s"updated_$n@test.com").map(_ => ()))
+          scUp
+        }.andThen(
+          // this operation triggers a snapshot
+          changeBirthdate(LocalDate.of(1950, 1, 1))
+        )
+        // this would persist event and creates a snapshot
+        persist(createNew[IO](initial).update(allOps), eventStore).unsafeRunSync()
+
+        val finalEmail = "final@test.com"
+        // this would simply append a single event
+        val latestState = hydrate[IO](initialState.id).update(updateEmail(finalEmail))
+          .persist(eventStore)
+          .unsafeRunSync().map(_._2).toOption
+        latestState.map(_.email) should be (Some(finalEmail))
 
         val snapshot = eventStore.loadLatestStateSnapshot(initialState.id)
           .unsafeRunSync()
         snapshot should be('defined)
+        snapshot.map(_._1) should not be equal(latestState)
 
-        val events = eventStore.loadEvents(initialState.id).compile.toList.unsafeRunSync()
-        events should not be empty
+        val hydratedState = hydrate[IO](initialState.id).state(eventStore)
+          .unsafeRunSync().toOption
+        hydratedState shouldEqual latestState
       }
     }
   }

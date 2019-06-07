@@ -59,7 +59,7 @@ private[shindy] object Hydrated {
   ) = Kleisli { eventStore: EventStore[STATE, EVENT, F] =>
     val stateWithVersionMaybe = for {
       snapshotMaybe <- eventStore.loadLatestStateSnapshot(aggregateId)
-      computedState <- eventStore.loadEvents(aggregateId, Option.empty[Int])
+      computedState <- eventStore.loadEvents(aggregateId, snapshotMaybe.map(_._2 + 1))
         .fold(snapshotMaybe) { case (s, event) =>
           Some(eventHandler(s.map(_._1), event.event) -> event.version)
         }.compile.toList.map(_.headOption.flatten)

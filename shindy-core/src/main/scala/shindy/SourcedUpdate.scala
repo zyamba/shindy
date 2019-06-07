@@ -18,6 +18,8 @@ object SourcedUpdate {
   }
 
   class purePartiallyApplied[STATE, EVENT]() {
+    def apply(): SourcedUpdate[STATE, EVENT, Unit] = apply(())
+
     def apply[A](a: A): SourcedUpdate[STATE, EVENT, A] = {
       val pureRun = ReaderWriterStateT.pure[Either[String, ?], Unit, Vector[EVENT], STATE, A](a)
       SourcedUpdate(pureRun)
