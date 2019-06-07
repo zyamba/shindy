@@ -29,4 +29,6 @@ class SourcedCreation[STATE, +EVENT, A](
 
   def andThen[E >: EVENT, B](cont: A => SourcedUpdate[STATE, E, B]): SourcedCreation[STATE, E, B] =
     SourcedCreation(create, upd andThen cont)
+
+  def get: SourcedCreation[STATE, EVENT, STATE] = SourcedCreation(this.create, this.upd.get)
 }
