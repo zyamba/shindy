@@ -2,3 +2,6 @@
 target
 .idea
 scalastyle-config.xml
+.bloop
+.idea
+.metals
