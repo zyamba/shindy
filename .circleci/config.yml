@@ -14,10 +14,8 @@ jobs:
     working_directory: ~/repo
 
     environment:
-      CC_TEST_REPORTER_ID: "f98d0e5c96a269fe86727790a94589b5a931354cee8f0a073de43e150c35cc30"
       JVM_OPTS: -Xmx512m
       TERM: dumb
-      CODECOV_TOKEN: "e9457e37-4ff6-417c-b52a-3fbe41652669"
       PG_DB: eventstore
       PG_USER: eventstore
       PG_PASSWORD: essecret
@@ -48,9 +46,9 @@ jobs:
           key: v2-dependencies-{{ checksum "project/Dependencies.scala" }}
 
       - run:
-          name: Run 2.12 and 2.13 tests
+          name: Make sure code compiles against both Scala versions
           command: |
-            cat /dev/null | sbt clean +test +db:test
+            cat /dev/null | sbt clean +test:compile
 
       - run:
           name: Run only 2.13 tests with coverage
