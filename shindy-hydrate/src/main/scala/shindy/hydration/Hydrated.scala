@@ -10,6 +10,9 @@ import cats.syntax.flatMap._
 import shindy.EventSourced.EventHandler
 import shindy.{EventSourced, SourcedCreation, SourcedUpdate}
 
+import shindy.compat._
+
+import scala.collection.compat._
 import scala.language.{higherKinds, reflectiveCalls}
 
 /**

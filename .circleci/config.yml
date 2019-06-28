@@ -39,7 +39,7 @@ jobs:
             chmod +x ./cc-test-reporter
 
       # fetch dependencies
-      - run: cat /dev/null | sbt test:compile
+      - run: cat /dev/null | sbt +test:compile
 
       - save_cache:
           paths:
@@ -48,15 +48,20 @@ jobs:
           key: v2-dependencies-{{ checksum "project/Dependencies.scala" }}
 
       - run:
-          name: Run tests
+          name: Run 2.12 and 2.13 tests
+          command: |
+            cat /dev/null | sbt clean +test +db:test
+
+      - run:
+          name: Run only 2.13 tests with coverage
           command: |
             cat /dev/null | sbt clean coverage test:test db:test coverageReport coverageAggregate
 
       - store_test_results:
-          path: target/scala-2.12/coverage-report
+          path: target/scala-2.13/coverage-report
 
       - store_artifacts:
-          path: target/scala-2.12/scoverage-report
+          path: target/scala-2.13/scoverage-report
           
       - run:
           name: Codecov report

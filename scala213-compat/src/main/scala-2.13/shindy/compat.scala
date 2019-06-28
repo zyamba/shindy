@@ -1,0 +1,4 @@
+package shindy
+
+object compat {
+}

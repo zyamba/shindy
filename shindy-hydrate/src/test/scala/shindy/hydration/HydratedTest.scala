@@ -8,13 +8,13 @@ import org.scalacheck.{Arbitrary, Gen}
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 import org.scalatest.{FreeSpec, Matchers}
+import shindy.compat._
 import shindy.{SourcedCreation, SourcedUpdate}
 import shindy.examples.UserService._
 
 import scala.Function.tupled
 import scala.collection.mutable
 import scala.language.reflectiveCalls
-import scala.Symbol
 
 class HydratedTest extends FreeSpec with Matchers with Hydration[UserRecord, UserRecordChangeEvent]
   with ScalaCheckDrivenPropertyChecks {
