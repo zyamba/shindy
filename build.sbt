@@ -7,9 +7,11 @@ inThisBuild(
     organization := "io.github.zyamba",
     organizationName := "zyamba",
     organizationHomepage := Some(url("https://github.com/zyamba")),
-    scalaVersion := "2.12.8",
+    scalaVersion := "2.13.0",
 
-    addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.8"),
+    resolvers += Resolver.sonatypeRepo("releases"),
+
+    addCompilerPlugin("org.typelevel" % "kind-projector" % "0.10.3" cross CrossVersion.binary),
 
     scalacOptions ++= Seq("-deprecation", "-feature"),
 

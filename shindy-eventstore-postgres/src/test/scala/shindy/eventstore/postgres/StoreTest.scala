@@ -14,7 +14,7 @@ import io.circe.generic.auto._
 import io.circe.syntax._
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.{Arbitrary, Gen}
-import org.scalatest.prop.GeneratorDrivenPropertyChecks
+import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 import org.scalatest.{Tag, _}
 import pureconfig.ConfigReader
 import pureconfig.generic.semiauto.deriveReader
@@ -43,8 +43,9 @@ object StoreTest {
 }
 
 class StoreTest extends FreeSpec
-  with GeneratorDrivenPropertyChecks
+  with ScalaCheckDrivenPropertyChecks
   with IOChecker
+  with EitherValues
   with Matchers
   with Hydration[UserRecord, UserRecordChangeEvent] {
 
@@ -93,7 +94,7 @@ class StoreTest extends FreeSpec
         val ops = createNew[IO](createUser(aggId, "test@test.com"))
           .update(_ => updateEmail("new-email@test.com"))
         val out = ops.persist(store).unsafeRunSync()
-        out should be('right)
+        out should be(Symbol("right"))
 
         val events = store.loadEvents(aggId).compile.toList.unsafeRunSync()
         events should have size 2
@@ -113,7 +114,7 @@ class StoreTest extends FreeSpec
           insertAndUpdate.unsafeRunSync() shouldEqual 2
 
           val snapshot = store.loadLatestStateSnapshot(id).unsafeRunSync()
-          snapshot should be('defined)
+          snapshot should be(Symbol("defined"))
           snapshot.get shouldEqual (newSnapshot, newSnapshotVersion)
         }
       }
@@ -131,7 +132,7 @@ class StoreTest extends FreeSpec
 
         val snapshot = store.loadLatestStateSnapshot(initialState.id)
           .unsafeRunSync()
-        snapshot shouldNot be('defined)
+        snapshot shouldNot be(Symbol("defined"))
 
         val events = store.loadEvents(initialState.id).compile.toList.unsafeRunSync()
         events should not be empty
@@ -150,7 +151,7 @@ class StoreTest extends FreeSpec
 
         val snapshot = store.loadLatestStateSnapshot(initialState.id)
           .unsafeRunSync()
-        snapshot should be('defined)
+        snapshot should be(Symbol("defined"))
 
         val events = store.loadEvents(initialState.id).compile.toList.unsafeRunSync()
         events should not be empty

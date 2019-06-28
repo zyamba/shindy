@@ -7,7 +7,6 @@ import cats.data.Kleisli
 import cats.syntax.either._
 import cats.syntax.functor._
 import cats.syntax.flatMap._
-import cats.syntax.option._
 import shindy.EventSourced.EventHandler
 import shindy.{EventSourced, SourcedCreation, SourcedUpdate}
 
@@ -92,7 +91,7 @@ private[shindy] object Hydrated {
         Kleisli { evS: EventStore[STATE, EVENT, F] =>
           maybeResults.traverse { case (events, state, r) =>
             val aggInitialVersion = r.aggregateInitVersion.map(_ + 1).getOrElse(0)
-            val versionedEvents = events.zip(Stream.from(aggInitialVersion))
+            val versionedEvents = events.zip(LazyList.from(aggInitialVersion))
               .map(Function tupled VersionedEvent.apply)
 
             val conditionallyStoreSnapshot = versionedEvents.lastOption.map(_.version)

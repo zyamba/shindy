@@ -6,7 +6,7 @@ import java.util.{Calendar, UUID}
 import cats.effect.IO
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalacheck.Arbitrary.arbitrary
-import org.scalatest.prop.GeneratorDrivenPropertyChecks
+import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
 import org.scalatest.{FreeSpec, Matchers}
 import shindy.{SourcedCreation, SourcedUpdate}
 import shindy.examples.UserService._
@@ -14,9 +14,10 @@ import shindy.examples.UserService._
 import scala.Function.tupled
 import scala.collection.mutable
 import scala.language.reflectiveCalls
+import scala.Symbol
 
 class HydratedTest extends FreeSpec with Matchers with Hydration[UserRecord, UserRecordChangeEvent]
-  with GeneratorDrivenPropertyChecks {
+  with ScalaCheckDrivenPropertyChecks {
 
   private val snapshotInterval = 100
 
@@ -76,16 +77,16 @@ class HydratedTest extends FreeSpec with Matchers with Hydration[UserRecord, Use
       // store some events
       val events = Vector(UserCreated(userId, "test@test.com"), EmailUpdated(updatedEmail),
         BirthdateUpdated(birthdate))
-      val versionedEvents = events.zip(Stream.from(1)).map(tupled(VersionedEvent.apply))
-      eventStore.storeEvents(userId, versionedEvents) unsafeRunSync()
+      val versionedEvents = events.zip(LazyList.from(1)).map(tupled(VersionedEvent.apply))
+      eventStore.storeEvents(userId, versionedEvents).unsafeRunSync()
 
       // hydrate record
       val stateRun = hydrate[IO](userId).state(eventStore)
 
       // evaluate state
-      val results = stateRun unsafeRunSync()
-      results should be('right)
-      val state = results.right.get
+      val results = stateRun.unsafeRunSync()
+      results should be (Symbol("right"))
+      val state = results.getOrElse(null)
 
       state.id shouldBe userId
       state.birthdate shouldBe Some(birthdate)
@@ -95,14 +96,14 @@ class HydratedTest extends FreeSpec with Matchers with Hydration[UserRecord, Use
     "events versions should be increasing" in {
       val userId = UUID.randomUUID()
       createNew[IO](createUser(userId, "test@gmail.com"))
-        .persist(eventStore).unsafeRunSync() should be('right)
+        .persist(eventStore).unsafeRunSync() should be(Symbol("right"))
 
       hydrate[IO](userId).update(
         updateEmail("updated@email.com") andThen changeBirthdate(LocalDate.of(2000, 1, 1))
-      ).persist(eventStore).unsafeRunSync() should be('right)
+      ).persist(eventStore).unsafeRunSync() should be(Symbol("right"))
 
       val events  = eventStore.loadEvents(userId).compile.toList.unsafeRunSync()
-      events.map(_.version) should contain theSameElementsInOrderAs Stream.from(0).take(events.size)
+      events.map(_.version) should contain theSameElementsInOrderAs LazyList.from(0).take(events.size)
 
     }
 
@@ -114,13 +115,13 @@ class HydratedTest extends FreeSpec with Matchers with Hydration[UserRecord, Use
       ) update updateEmail("updated@email.com")
 
       val value = hydratedAggregate.persist(eventStore).unsafeRunSync()
-      value should be('right)
+      value should be(Symbol("right"))
 
-      val (id, state, _) = value.right.get
+      val (id, state, _) = value.getOrElse(null)
       id shouldBe userId
       state.email shouldBe "updated@email.com"
 
-      val results = eventStore.loadEvents(id).compile.toList unsafeRunSync()
+      val results = eventStore.loadEvents(id).compile.toList.unsafeRunSync()
       results should not be empty
       results.map(_.version) shouldEqual results.indices.toList
       results.map(_.event) should contain theSameElementsInOrderAs Seq(
@@ -151,7 +152,7 @@ class HydratedTest extends FreeSpec with Matchers with Hydration[UserRecord, Use
 
         val snapshot = eventStore.loadLatestStateSnapshot(initialState.id)
           .unsafeRunSync()
-        snapshot shouldNot be('defined)
+        snapshot shouldNot be(Symbol("defined"))
 
         val events = eventStore.loadEvents(initialState.id).compile.toList.unsafeRunSync()
         events should not be empty
@@ -181,7 +182,7 @@ class HydratedTest extends FreeSpec with Matchers with Hydration[UserRecord, Use
 
         val snapshot = eventStore.loadLatestStateSnapshot(initialState.id)
           .unsafeRunSync()
-        snapshot should be('defined)
+        snapshot should be(Symbol("defined"))
         snapshot.map(_._1) should not be equal(latestState)
 
         val hydratedState = hydrate[IO](initialState.id).state(eventStore)

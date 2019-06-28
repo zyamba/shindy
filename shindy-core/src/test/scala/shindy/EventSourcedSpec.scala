@@ -72,8 +72,8 @@ class EventSourcedSpec extends FreeSpec with Matchers {
       val userId = UUID.randomUUID()
       val results = createUser(userId, email) run
 
-      results should be('right)
-      val (events, state, _) = results.right.get
+      results should be(Symbol("right"))
+      val Right((events, state, _)) = results
 
       events should have size 1
       events.head shouldEqual UserCreated(userId, email)
@@ -84,9 +84,9 @@ class EventSourcedSpec extends FreeSpec with Matchers {
     "should be able to execute update of the given state" in {
       val updEmail = "new@yahoo.com"
       val results = updateEmail(updEmail) run UserRecordActive(UUID.randomUUID(), "original@google.com", None)
-      results should be('right)
+      results should be(Symbol("right"))
 
-      val (events, state, _) = results.right.get
+      val Right((events, state, _)) = results
       events should have size 1
       events.head shouldEqual EmailUpdated(updEmail)
 
@@ -98,8 +98,8 @@ class EventSourcedSpec extends FreeSpec with Matchers {
       val userId = UUID.randomUUID()
       val results = createUser(userId, email) andThen changeBirthdate(LocalDate.of(2018, 12, 12)) run
 
-      results should be('left)
-      results.left.get should include("Too young")
+      results should be(Symbol("left"))
+      results.left.getOrElse("") should include("Too young")
     }
 
     "should be able to execute conditional update" in {
@@ -115,8 +115,8 @@ class EventSourcedSpec extends FreeSpec with Matchers {
 
       {
         val results = conditionalUpdate run stateFalse
-        results should be('right)
-        val (events, state, out) = results.right.get
+        results should be(Symbol("right"))
+        val Right((events, state, out)) = results
         events should be(empty)
         state shouldEqual stateFalse
         out shouldBe None
@@ -126,8 +126,8 @@ class EventSourcedSpec extends FreeSpec with Matchers {
 
       {
         val results = conditionalUpdate run stateTrue
-        results should be('right)
-        val (events, state, out) = results.right.get
+        results should be(Symbol("right"))
+        val Right((events, state, out)) = results
         events should have size 1
         events.head shouldEqual EmailUpdated(happyBirthdayEmail)
         state.asInstanceOf[UserRecordActive].email shouldEqual happyBirthdayEmail
@@ -146,9 +146,9 @@ class EventSourcedSpec extends FreeSpec with Matchers {
       })
 
       val runTrue = condOp.run(activeUser)
-      runTrue should be('right)
+      runTrue should be(Symbol("right"))
 
-      val (ev, u, out) = runTrue.right.get
+      val Right((ev, u, out)) = runTrue
       ev should have size 1
       u.asInstanceOf[UserRecordActive].email shouldEqual updatedEmail
       out shouldEqual Some(output)
@@ -165,10 +165,10 @@ class EventSourcedSpec extends FreeSpec with Matchers {
         })
 
       val runFalse = condOp.run(inactiveUser)
-      runFalse should be('right)
+      runFalse should be(Symbol("right"))
 
-      val (ev, u, out) = runFalse.right.get
-      ev should be('empty)
+      val Right((ev, u, out)) = runFalse
+      ev should be(Symbol("empty"))
       u.asInstanceOf[UserRecordInactive].suspended.email should not equal updatedEmail
       out shouldEqual None
     }
@@ -188,8 +188,8 @@ class EventSourcedSpec extends FreeSpec with Matchers {
         }
 
       val results = createAndModifyUser.run
-      results should be('right)
-      val (events, finalState, _) = results.right.get
+      results should be(Symbol("right"))
+      val Right((events, finalState, _)) = results
 
       events should contain inOrder(
         UserCreated(userId, regEmail), EmailUpdated(updEmail), BirthdateUpdated(birthdate)
@@ -211,8 +211,8 @@ class EventSourcedSpec extends FreeSpec with Matchers {
 
       val results = (createUser(userId, regEmail) andThen modifyUser) run
 
-      results should be('right)
-      val (events, finalState, msg) = results.right.get
+      results should be(Symbol("right"))
+      val Right((events, finalState, msg)) = results
 
       events should contain inOrder(
         UserCreated(userId, regEmail), EmailUpdated(updEmail), BirthdateUpdated(birthdate)
@@ -226,8 +226,8 @@ class EventSourcedSpec extends FreeSpec with Matchers {
       val errSourced = sourceNew[UserRecord](Left(errMessage)) andThen updateEmail("wrong-email")
 
       val runResult = errSourced.run
-      runResult should be('left)
-      runResult.left.get should include(errMessage)
+      runResult should be(Symbol("left"))
+      runResult.left.getOrElse("") should include(errMessage)
     }
 
     "should fail if error is sourced" in {
@@ -238,8 +238,8 @@ class EventSourcedSpec extends FreeSpec with Matchers {
 
       val userRecordState = UserRecordActive(UUID.randomUUID(), "test@test.com")
       val runResult = errSourced.run(userRecordState)
-      runResult should be('left)
-      runResult.left.get should include(errMessage)
+      runResult should be(Symbol("left"))
+      runResult.left.getOrElse("") should include(errMessage)
     }
 
     "should be able to inspect state" in {
@@ -251,8 +251,8 @@ class EventSourcedSpec extends FreeSpec with Matchers {
 
       val userRecordState = UserRecordActive(UUID.randomUUID(), "test@test.com")
       val runResult = inspectEmail.run(userRecordState)
-      runResult should be('right)
-      runResult.right.get._3 shouldEqual Option(userRecordState.email)
+      runResult should be(Symbol("right"))
+      runResult.getOrElse(null)._3 shouldEqual Option(userRecordState.email)
     }
   }
 
