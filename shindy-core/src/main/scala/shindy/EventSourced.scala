@@ -41,7 +41,7 @@ object EventSourced {
     */
   def source[STATE, EVENT](block: STATE => Either[String, EVENT])(
     implicit eventHandler: EventHandler[STATE, EVENT]
-  ): SourcedUpdate[STATE, EVENT, Unit] = sourceOut(block(_).map((_, Unit)))
+  ): SourcedUpdate[STATE, EVENT, Unit] = sourceOut(block(_).map((_, ())))
 
   /**
     * Similar to `source` but allows returning extra value that can be pushed to next step
@@ -100,7 +100,7 @@ object EventSourced {
       implicit eventHandler: EventHandler[STATE, EVENT]
     ): SourcedCreation[STATE, EVENT, Unit] = {
       val eventEval = Eval.later(block)
-      val stateEval = eventEval.map(_.right.map { ev =>
+      val stateEval = eventEval.map(_.map { ev =>
         eventHandler(Option.empty[STATE], ev)
       })
       val pureNop = SourcedUpdate.pure[STATE, EVENT](())

@@ -14,10 +14,8 @@ jobs:
     working_directory: ~/repo
 
     environment:
-      CC_TEST_REPORTER_ID: "f98d0e5c96a269fe86727790a94589b5a931354cee8f0a073de43e150c35cc30"
-      JVM_OPTS: -Xmx256m
+      JVM_OPTS: -Xmx512m
       TERM: dumb
-      CODECOV_TOKEN: "e9457e37-4ff6-417c-b52a-3fbe41652669"
       PG_DB: eventstore
       PG_USER: eventstore
       PG_PASSWORD: essecret
@@ -39,7 +37,7 @@ jobs:
             chmod +x ./cc-test-reporter
 
       # fetch dependencies
-      - run: cat /dev/null | sbt test:compile
+      - run: cat /dev/null | sbt +test:compile
 
       - save_cache:
           paths:
@@ -48,15 +46,20 @@ jobs:
           key: v2-dependencies-{{ checksum "project/Dependencies.scala" }}
 
       - run:
-          name: Run tests
+          name: Make sure code compiles against both Scala versions
+          command: |
+            cat /dev/null | sbt clean +test:compile
+
+      - run:
+          name: Run only 2.13 tests with coverage
           command: |
             cat /dev/null | sbt clean coverage test:test db:test coverageReport coverageAggregate
 
       - store_test_results:
-          path: target/scala-2.12/coverage-report
+          path: target/scala-2.13/coverage-report
 
       - store_artifacts:
-          path: target/scala-2.12/scoverage-report
+          path: target/scala-2.13/scoverage-report
           
       - run:
           name: Codecov report
