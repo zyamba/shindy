@@ -205,7 +205,7 @@ class EventSourcedSpec extends FreeSpec with Matchers {
 
       val modifyUser =
         for {
-          s1 <- updateEmail(updEmail).map(_ => "Hello, ").adaptEvent[UserRecordChangeEvent]
+          s1 <- updateEmail(updEmail).map(_ => "Hello, ").widen[UserRecordChangeEvent]
           s2 <- changeBirthdate(birthdate).map(_ => "world")
         } yield s1 + s2
 
@@ -233,7 +233,7 @@ class EventSourcedSpec extends FreeSpec with Matchers {
     "should fail if error is sourced" in {
       val errMessage = "Error sourced"
       val errSourced: SourcedUpdate[UserRecord, UserRecordChangeEvent, Option[Unit]] = whenStateIs {
-        _: UserRecordActive => SourcedUpdate.error(errMessage)
+        _: UserRecordActive => sourceError(errMessage)
       }
 
       val userRecordState = UserRecordActive(UUID.randomUUID(), "test@test.com")
