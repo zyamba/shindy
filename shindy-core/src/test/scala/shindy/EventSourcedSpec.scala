@@ -205,7 +205,7 @@ class EventSourcedSpec extends FreeSpec with Matchers {
 
       val modifyUser =
         for {
-          s1 <- updateEmail(updEmail).map(_ => "Hello, ").adaptEvent[UserRecordChangeEvent]
+          s1 <- updateEmail(updEmail).map(_ => "Hello, ").widen[UserRecordChangeEvent]
           s2 <- changeBirthdate(birthdate).map(_ => "world")
         } yield s1 + s2
 
@@ -233,7 +233,7 @@ class EventSourcedSpec extends FreeSpec with Matchers {
     "should fail if error is sourced" in {
       val errMessage = "Error sourced"
       val errSourced: SourcedUpdate[UserRecord, UserRecordChangeEvent, Option[Unit]] = whenStateIs {
-        _: UserRecordActive => SourcedUpdate.error(errMessage)
+        _: UserRecordActive => sourceError(errMessage)
       }
 
       val userRecordState = UserRecordActive(UUID.randomUUID(), "test@test.com")
@@ -253,6 +253,27 @@ class EventSourcedSpec extends FreeSpec with Matchers {
       val runResult = inspectEmail.run(userRecordState)
       runResult should be(Symbol("right"))
       runResult.getOrElse(null)._3 shouldEqual Option(userRecordState.email)
+    }
+
+    "should be able to collect events from SourcedCreate and SourcedUpdate" in {
+      val sourcedCreate = createUser(UUID.randomUUID(), "test1@test.com")
+      val sourcedUpdate = updateEmail("test2@test.com").
+        andThen(updateEmail("test3@test.com")).
+        andThen(changeBirthdate(LocalDate.of(2000, 1, 2)))
+      val program = sourcedCreate andThen sourcedUpdate
+
+      val eventsEither = program.events
+      eventsEither should be(Symbol("right"))
+      val Right(events) = eventsEither
+      events should have size 4
+
+      val updateEventsEither = sourcedUpdate.events(
+        UserRecordActive(UUID.randomUUID(), "one@test.com")
+      )
+      updateEventsEither should be (Symbol("right"))
+      val Right(updateEvents) = updateEventsEither
+      updateEvents should have size 3
+
     }
   }
 

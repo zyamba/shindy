@@ -163,13 +163,13 @@ class HydratedTest extends FreeSpec with Matchers with Hydration[UserRecord, Use
       forAll { initialState: UserRecord =>
         val initial = createUser(initialState.id, initialState.email)
 
-        val allOps = (1 until snapshotInterval).foldLeft(SourcedUpdate.pure[UserRecord, UserRecordChangeEvent]()) { (sc, n) =>
-          val scUp = sc.andThen(updateEmail(s"updated_$n@test.com").map(_ => ()))
-          scUp
-        }.andThen(
-          // this operation triggers a snapshot
-          changeBirthdate(LocalDate.of(1950, 1, 1))
-        )
+        val allOps = (1 until snapshotInterval)
+          .foldLeft(SourcedUpdate.pure[UserRecord, UserRecordChangeEvent](())) { (sc, n) =>
+            sc andThen updateEmail(s"updated_$n@test.com").map(_ => ())
+          } andThen {
+            // this operation triggers a snapshot
+            changeBirthdate(LocalDate.of(1950, 1, 1))
+          }
         // this would persist event and creates a snapshot
         persist(createNew[IO](initial).update(allOps), eventStore).unsafeRunSync()
 

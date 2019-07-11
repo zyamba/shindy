@@ -9,17 +9,7 @@ import scala.language.{higherKinds, implicitConversions, reflectiveCalls}
 object SourcedUpdate {
   def pure[STATE, EVENT] = new purePartiallyApplied[STATE, EVENT]
 
-  def error[STATE, EVENT, Out](msg: String): SourcedUpdate[STATE, EVENT, Out] = {
-    SourcedUpdate {
-      ReaderWriterStateT.apply[Either[String, ?], Unit, Vector[EVENT], STATE, Out](
-        (_, _) => Left(msg)
-      )
-    }
-  }
-
   class purePartiallyApplied[STATE, EVENT]() {
-    def apply(): SourcedUpdate[STATE, EVENT, Unit] = apply(())
-
     def apply[A](a: A): SourcedUpdate[STATE, EVENT, A] = {
       val pureRun = ReaderWriterStateT.pure[Either[String, ?], Unit, Vector[EVENT], STATE, A](a)
       SourcedUpdate(pureRun)
@@ -28,18 +18,29 @@ object SourcedUpdate {
 
   //noinspection TypeAnnotation
   implicit def SourcedUpdateMonadOps[S, E, A](self: SourcedUpdate[S, E, A]) = new {
-    def map[B](f: A => B): SourcedUpdate[S, E, B] = SourcedUpdate(self.adaptEvent[E].run.map(f))
+    def map[B](f: A => B): SourcedUpdate[S, E, B] = SourcedUpdate(self.widen[E].run.map(f))
 
     def flatMap[B](f: A => SourcedUpdate[S, E, B]): SourcedUpdate[S, E, B] = self.andThen(f)
   }
 
 }
 
+/**
+  * Sourced update operation with [[A]] as an output. Can be chained using andThen method to create complex
+  * operations.
+  *
+  * Developers should not create this instance directly and instead use DSL provided by [[EventSourced]] object.
+  *
+  * @param run a program to run
+  * @tparam STATE State type
+  * @tparam EVENT Event type
+  * @tparam A Output type
+  */
 case class SourcedUpdate[STATE, +EVENT, A](
   run: ReaderWriterStateT[Either[String, ?], Unit, Vector[EVENT@uncheckedVariance], STATE, A]) {
 
   /**
-    * Change event type to contravariant E. Useful when using for comprehension instead of `andThen` method:
+    * Widen event type. Useful when using for comprehension instead of `andThen` method:
     * {{{
     * case class UserRecord(...)
     *
@@ -52,13 +53,13 @@ case class SourcedUpdate[STATE, +EVENT, A](
     * val changePassword: SourcedUpdate[UserRecord, PasswordChangedEvent, Unit] = ???
     *
     * val changeBoth: SourcedUpdate[UserRecord, UserEvent, Unit] = for {
-    *   _ <- changeUsername.adaptEvent[UserEvent]
+    *   _ <- changeUsername.widen[UserEvent]
     *   _ <- changePassword
     * } yield ()
     * }}}
     * @tparam E contravariant event type
     */
-  def adaptEvent[E >: EVENT]: SourcedUpdate[STATE, E, A] = this
+  def widen[E >: EVENT]: SourcedUpdate[STATE, E, A] = this
 
   /**
     * Inspect current state.
@@ -101,8 +102,8 @@ case class SourcedUpdate[STATE, +EVENT, A](
     * Compose two `SourceUpdate` into one
     */
   def andThen[E >: EVENT, B](other: A => SourcedUpdate[STATE, E, B]): SourcedUpdate[STATE, E, B] =
-    SourcedUpdate(this.adaptEvent[E].run.flatMap(other(_).run))
+    SourcedUpdate(this.widen[E].run.flatMap(other(_).run))
 
   private[shindy] def tell[E >: EVENT](event: E): SourcedUpdate[STATE, E, A] =
-    SourcedUpdate(this.adaptEvent[E].run.tell(Vector(event)))
+    SourcedUpdate(this.widen[E].run.tell(Vector(event)))
 }

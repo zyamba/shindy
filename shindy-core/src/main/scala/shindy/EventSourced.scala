@@ -44,6 +44,18 @@ object EventSourced {
   ): SourcedUpdate[STATE, EVENT, Unit] = sourceOut(block(_).map((_, ())))
 
   /**
+    * Builds SourcedUpdate that always reports error
+    *
+    * @param msg Error message
+    */
+  def sourceError[STATE, EVENT, Out](msg: String): SourcedUpdate[STATE, EVENT, Out] =
+    SourcedUpdate {
+      ReaderWriterStateT.apply[Either[String, ?], Unit, Vector[EVENT], STATE, Out](
+        (_, _) => Left(msg)
+      )
+    }
+
+  /**
     * Similar to `source` but allows returning extra value that can be pushed to next step
     * when using `andThen` composition.
     */
@@ -62,6 +74,7 @@ object EventSourced {
 
   /**
     * Conditionally execute update operation.
+    *
     * @param predicate State predicate
     * @param sourcedUpdate Conditional operation
     */
@@ -108,7 +121,7 @@ object EventSourced {
       // since the state was originated from event
       val sourceUpdate = pureNop.flatMap[Unit] { _ =>
         eventEval.value match {
-          case Left(msg) => SourcedUpdate.error(msg)
+          case Left(msg) => sourceError(msg)
           case Right(ev) => pureNop.tell(ev)
         }
       }
