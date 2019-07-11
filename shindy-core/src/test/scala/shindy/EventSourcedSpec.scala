@@ -254,6 +254,27 @@ class EventSourcedSpec extends FreeSpec with Matchers {
       runResult should be(Symbol("right"))
       runResult.getOrElse(null)._3 shouldEqual Option(userRecordState.email)
     }
+
+    "should be able to collect events from SourcedCreate and SourcedUpdate" in {
+      val sourcedCreate = createUser(UUID.randomUUID(), "test1@test.com")
+      val sourcedUpdate = updateEmail("test2@test.com").
+        andThen(updateEmail("test3@test.com")).
+        andThen(changeBirthdate(LocalDate.of(2000, 1, 2)))
+      val program = sourcedCreate andThen sourcedUpdate
+
+      val eventsEither = program.events
+      eventsEither should be(Symbol("right"))
+      val Right(events) = eventsEither
+      events should have size 4
+
+      val updateEventsEither = sourcedUpdate.events(
+        UserRecordActive(UUID.randomUUID(), "one@test.com")
+      )
+      updateEventsEither should be (Symbol("right"))
+      val Right(updateEvents) = updateEventsEither
+      updateEvents should have size 3
+
+    }
   }
 
   "EventHandler" - {
