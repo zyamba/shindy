@@ -25,6 +25,11 @@ inThisBuild(
       scalacheck % Test
     ),
 
+    dependencyOverrides ++= Seq(
+      `cats-core`,
+      `cats-macros`
+    ),
+
     scmInfo := Some(
       ScmInfo(
         url("https://github.com/zyamba/shindy"),

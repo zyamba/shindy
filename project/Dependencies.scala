@@ -3,7 +3,7 @@ import sbt._
 object Dependencies {
 
   object Versions {
-    val cats = "2.0.0-M4"
+    val cats = "2.0.0-RC1"
     val fs2 = "1.1.0-M1"
     val circe = "0.12.0-RC1"
     val pureconfig = "0.11.1"
@@ -20,6 +20,7 @@ object Dependencies {
 
   lazy val `cats-core` = "org.typelevel" %% "cats-core" % Versions.cats
   lazy val `cats-effect` = "org.typelevel" %% "cats-effect" % Versions.cats
+  lazy val `cats-macros` = "org.typelevel" %% "cats-macros" % Versions.cats
 
   lazy val `fs2-core` = "co.fs2" %% "fs2-core" % Versions.fs2
 
