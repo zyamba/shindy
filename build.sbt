@@ -1,4 +1,5 @@
 import Dependencies._
+import ReleaseTransformations._
 import sbt.Keys.testOptions
 import sbt.Tests
 
@@ -54,6 +55,23 @@ ThisBuild / publishMavenStyle := true
 ThisBuild / useGpg := true
 
 ThisBuild / releasePublishArtifactsAction := PgpKeys.publishSigned.value
+
+ThisBuild / releaseCrossBuild := true
+ThisBuild / releaseProcess := Seq[ReleaseStep](
+  checkSnapshotDependencies,
+  inquireVersions,
+  runClean,
+  runTest,
+  setReleaseVersion,
+  commitReleaseVersion,
+  tagRelease,
+  // For non cross-build projects, use releaseStepCommand("publishSigned")
+  releaseStepCommandAndRemaining("+publishSigned"),
+  setNextVersion,
+  commitNextVersion,
+  releaseStepCommand("sonatypeReleaseAll"),
+  pushChanges
+)
 
 val DbTests = config("db").extend(Test)
 configs(DbTests)
