@@ -5,10 +5,10 @@ object Dependencies {
   object Versions {
     val cats = "2.0.0-M4"
     val fs2 = "1.1.0-M1"
-    val circe = "0.12.0-M3"
+    val circe = "0.12.0-RC1"
     val pureconfig = "0.11.1"
-    val doobie = "0.8.0-M1"
-    val postgresqlJdbcDriver = "42.2.5"
+    val doobie = "0.8.0-M3"
+    val postgresqlJdbcDriver = "42.2.6"
     val hikariCp = "3.3.1"
   }
 

@@ -47,12 +47,11 @@ inThisBuild(
 
   )
 )
-ThisBuild / publishTo := {
-  val nexus = "https://oss.sonatype.org/"
-  if (isSnapshot.value) Some("snapshots" at nexus + "content/repositories/snapshots")
-  else Some("releases" at nexus + "service/local/staging/deploy/maven2")
-}
+
+ThisBuild / publishTo := sonatypePublishTo.value
 ThisBuild / publishMavenStyle := true
+
+ThisBuild / useGpg := true
 
 ThisBuild / releasePublishArtifactsAction := PgpKeys.publishSigned.value
 
