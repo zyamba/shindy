@@ -54,7 +54,7 @@ inThisBuild(
   )
 )
 
-ThisBuild / publishTo := sonatypePublishTo.value
+ThisBuild / publishTo := sonatypePublishToBundle.value
 ThisBuild / publishMavenStyle := true
 
 ThisBuild / useGpg := true
