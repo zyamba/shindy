@@ -2,18 +2,19 @@ package shindy.eventstore.postgres
 
 import java.util.UUID
 
-import io.circe.syntax._
-import cats.Monad
+import cats._
 import cats.effect.Bracket
-import cats.instances.vector._
-import cats.syntax.functor._
+import cats.implicits._
 import doobie.implicits._
+import doobie.implicits.javatime._
 import doobie.postgres.implicits._
-import doobie.util.{fragment, update}
 import doobie.util.transactor.Transactor
 import doobie.util.update.Update
+import doobie.util.{Put, Read, fragment, update}
+import io.circe.syntax._
 import io.circe.{Decoder, Encoder, Json}
 import shindy.hydration.{EventStore, VersionedEvent}
+import JsonSupport._
 
 import scala.language.higherKinds
 

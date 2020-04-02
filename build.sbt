@@ -8,20 +8,22 @@ inThisBuild(
     organization := "io.github.zyamba",
     organizationName := "zyamba",
     organizationHomepage := Some(url("https://github.com/zyamba")),
-    scalaVersion := "2.13.0",
+    scalaVersion := "2.13.1",
 
-    crossScalaVersions := Seq("2.13.0", "2.12.8"),
+    crossScalaVersions := Seq("2.13.1", "2.12.8"),
 
     resolvers += Resolver.sonatypeRepo("releases"),
 
-    addCompilerPlugin("org.typelevel" % "kind-projector" % "0.10.3" cross CrossVersion.binary),
+    addCompilerPlugin(`kind-projector` cross CrossVersion.binary),
 
     scalacOptions ++= Seq("-deprecation", "-feature"),
 
     libraryDependencies ++= Seq(
-      "org.scala-lang.modules" %% "scala-collection-compat" % "2.0.0", // Scala 2.13 compatibility
-      scalactic % Test,
+      `scala-collection-compat`, // Scala 2.13 collection compatibility
+      scalactic,
       scalatest % Test,
+      // temporarily until 3.2.x is released
+      "org.scalatestplus" %% "scalacheck-1-14" % "3.1.0.0" % Test,
       scalacheck % Test
     ),
 
@@ -98,11 +100,7 @@ lazy val examples = project settings(
 ) dependsOn `shindy-core`
 
 lazy val `shindy-hydrate` = project
-  .dependsOn(`shindy-core`, `scala213-compat`, examples % Test)
-
-lazy val `scala213-compat` = project.settings(
-  coverageEnabled := false
-)
+  .dependsOn(`shindy-core`, examples % Test)
 
 lazy val `shindy-eventstore-postgres` = project.configs(DbTests).settings (
   dbTestsCommonSettings,

@@ -10,8 +10,6 @@ import cats.syntax.flatMap._
 import shindy.EventSourced.EventHandler
 import shindy.{EventSourced, SourcedCreation, SourcedUpdate}
 
-import shindy.compat._
-
 import scala.collection.compat._
 import scala.language.{higherKinds, reflectiveCalls}
 
@@ -94,7 +92,7 @@ private[shindy] object Hydrated {
         Kleisli { evS: EventStore[STATE, EVENT, F] =>
           maybeResults.traverse { case (events, state, r) =>
             val aggInitialVersion = r.aggregateInitVersion.map(_ + 1).getOrElse(0)
-            val versionedEvents = events.zip(LazyList.from(aggInitialVersion))
+            val versionedEvents = events.zip(Stream.from(aggInitialVersion))
               .map(Function tupled VersionedEvent.apply)
 
             val conditionallyStoreSnapshot = versionedEvents.lastOption.map(_.version)

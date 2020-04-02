@@ -9,18 +9,23 @@ import cats.data.Kleisli
 import cats.effect.{ContextShift, IO}
 import doobie._
 import doobie.scalatest.IOChecker
+import doobie.implicits.javatime._
 import doobie.util.transactor.Transactor.Aux
 import io.circe.generic.auto._
 import io.circe.syntax._
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.{Arbitrary, Gen}
-import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
-import org.scalatest.{Tag, _}
+import org.scalatest._
+import org.scalatest.freespec.AnyFreeSpec
+import org.scalatest.matchers.should.Matchers
+import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import pureconfig.ConfigReader
 import pureconfig.generic.semiauto.deriveReader
 import shindy.SourcedCreation
 import shindy.examples.UserService._
 import shindy.hydration.Hydration
+
+import JsonSupport._
 
 import scala.concurrent.ExecutionContext
 import scala.language.reflectiveCalls
@@ -42,8 +47,8 @@ object StoreTest {
   }
 }
 
-class StoreTest extends FreeSpec
-  with ScalaCheckDrivenPropertyChecks
+class StoreTest extends AnyFreeSpec
+  with ScalaCheckPropertyChecks
   with IOChecker
   with EitherValues
   with Matchers

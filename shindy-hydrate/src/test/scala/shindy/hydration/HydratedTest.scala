@@ -6,9 +6,10 @@ import java.util.{Calendar, UUID}
 import cats.effect.IO
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalacheck.Arbitrary.arbitrary
+import org.scalatest.freespec.AnyFreeSpec
 import org.scalatestplus.scalacheck.ScalaCheckDrivenPropertyChecks
-import org.scalatest.{FreeSpec, Matchers}
-import shindy.compat._
+import org.scalatest._
+import org.scalatest.matchers.should.Matchers
 import shindy.{SourcedCreation, SourcedUpdate}
 import shindy.examples.UserService._
 
@@ -16,7 +17,7 @@ import scala.Function.tupled
 import scala.collection.mutable
 import scala.language.reflectiveCalls
 
-class HydratedTest extends FreeSpec with Matchers with Hydration[UserRecord, UserRecordChangeEvent]
+class HydratedTest extends AnyFreeSpec with Matchers with Hydration[UserRecord, UserRecordChangeEvent]
   with ScalaCheckDrivenPropertyChecks {
 
   private val snapshotInterval = 100
@@ -38,7 +39,7 @@ class HydratedTest extends FreeSpec with Matchers with Hydration[UserRecord, Use
     extends EventStore[UserRecord, UserRecordChangeEvent, IO] {
 
     override def loadEvents(aggregateId: UUID, fromVersion: Option[Int] = None): fs2.Stream[IO, VersionedEvent[UserRecordChangeEvent]] =
-      fs2.Stream.fromIterator[IO, VersionedEvent[UserRecordChangeEvent]]{
+      fs2.Stream.fromIterator[IO].apply{
         val minVersion = fromVersion.getOrElse(0)
         eventsStore(aggregateId).iterator.filter(_.version >= minVersion)
       }
@@ -77,7 +78,7 @@ class HydratedTest extends FreeSpec with Matchers with Hydration[UserRecord, Use
       // store some events
       val events = Vector(UserCreated(userId, "test@test.com"), EmailUpdated(updatedEmail),
         BirthdateUpdated(birthdate))
-      val versionedEvents = events.zip(LazyList.from(1)).map(tupled(VersionedEvent.apply))
+      val versionedEvents = events.zip(Stream.from(1)).map(tupled(VersionedEvent.apply))
       eventStore.storeEvents(userId, versionedEvents).unsafeRunSync()
 
       // hydrate record
@@ -103,7 +104,7 @@ class HydratedTest extends FreeSpec with Matchers with Hydration[UserRecord, Use
       ).persist(eventStore).unsafeRunSync() should be(Symbol("right"))
 
       val events  = eventStore.loadEvents(userId).compile.toList.unsafeRunSync()
-      events.map(_.version) should contain theSameElementsInOrderAs LazyList.from(0).take(events.size)
+      events.map(_.version) should contain theSameElementsInOrderAs Stream.from(0).take(events.size)
 
     }
 
