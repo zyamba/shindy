@@ -4,7 +4,6 @@ import cats.Eval
 import cats.data.ReaderWriterStateT
 import cats.instances.either._
 import cats.syntax.option._
-import shindy.EventSourced.EventHandler
 
 import scala.language.reflectiveCalls
 import scala.reflect.ClassTag
@@ -51,7 +50,7 @@ object EventSourced {
     */
   def sourceError[STATE, EVENT](msg: String): SourcedUpdate[STATE, EVENT, Nothing] =
     SourcedUpdate {
-      ReaderWriterStateT.apply[Either[String, ?], Unit, Vector[EVENT], STATE, Nothing](
+      ReaderWriterStateT.apply[Either[String, *], Unit, Vector[EVENT], STATE, Nothing](
         (_, _) => Left(msg)
       )
     }
@@ -135,7 +134,7 @@ object EventSourced {
     */
   private def sourceInt[Out, EVENT, STATE](block: STATE => Either[String, (Vector[EVENT], Out)])(
     implicit eventHandler: EventHandler[STATE, EVENT]
-  ) = ReaderWriterStateT.apply[Either[String, ?], Unit, Vector[EVENT], STATE, Out] { (_, startState) =>
+  ) = ReaderWriterStateT.apply[Either[String, *], Unit, Vector[EVENT], STATE, Out] { (_, startState) =>
     block(startState).map { case (events, out) =>
       val finalState = events.foldLeft(startState) { case (state, event) =>
         eventHandler(Some(state), event)

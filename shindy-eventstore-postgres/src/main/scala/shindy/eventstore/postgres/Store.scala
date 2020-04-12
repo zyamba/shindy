@@ -71,7 +71,7 @@ class StoreZ[STATE: Decoder : Encoder, EVENT: Decoder : Encoder](
   implicitly[Read[StoreEvent]]
   override def loadEvents(aggregateId: UUID, fromVersion: Option[Int]): Task[Stream[Throwable, VersionedEvent[EVENT]]] =
     selectEvents(aggregateId, fromVersion).query[StoreEvent]
-      .accumulate[Stream[Throwable, ?]].transact(transactor)
+      .accumulate[Stream[Throwable, *]].transact(transactor)
       .map { eventStream =>
         eventStream.map(se => VersionedEvent(decodeFromJson[EVENT](se.eventBody), se.aggregateVersion))
       }
