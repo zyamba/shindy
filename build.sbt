@@ -8,20 +8,22 @@ inThisBuild(
     organization := "io.github.zyamba",
     organizationName := "zyamba",
     organizationHomepage := Some(url("https://github.com/zyamba")),
-    scalaVersion := "2.13.0",
+    scalaVersion := "2.13.1",
 
-    crossScalaVersions := Seq("2.13.0", "2.12.8"),
+    crossScalaVersions := Seq("2.13.1", "2.12.8"),
 
     resolvers += Resolver.sonatypeRepo("releases"),
 
-    addCompilerPlugin("org.typelevel" % "kind-projector" % "0.10.3" cross CrossVersion.binary),
+    addCompilerPlugin(`kind-projector` cross CrossVersion.binary),
 
     scalacOptions ++= Seq("-deprecation", "-feature"),
 
     libraryDependencies ++= Seq(
-      "org.scala-lang.modules" %% "scala-collection-compat" % "2.0.0", // Scala 2.13 compatibility
-      scalactic % Test,
+      `scala-collection-compat`, // Scala 2.13 collection compatibility
+      scalactic,
       scalatest % Test,
+      // todo: temporarily until 3.2.x is released
+      "org.scalatestplus" %% "scalacheck-1-14" % "3.1.0.0" % Test,
       scalacheck % Test
     ),
 
@@ -88,29 +90,42 @@ lazy val dbTestsCommonSettings = inConfig(DbTests)(Defaults.testTasks) ++ Seq(
 
 lazy val `shindy-core` = project settings (
   libraryDependencies ++= Seq(
-    `cats-core`,
-    `fs2-core`
+    `cats-core`
   )
 )
 
-lazy val examples = project settings(
+lazy val examples = project.settings(
   skip in publish := true
-) dependsOn `shindy-core`
+).dependsOn(`shindy-core`)
 
-lazy val `shindy-hydrate` = project
-  .dependsOn(`shindy-core`, `scala213-compat`, examples % Test)
+lazy val `shindy-eventstore`  = project
+  .settings(
+    libraryDependencies ++= Seq(
+      zio,
+      zioStreams,
+    ),
+    coverageEnabled := false, // eventstore-spec has the test
+  ).dependsOn(`shindy-core`)
 
-lazy val `scala213-compat` = project.settings(
-  coverageEnabled := false
-)
+lazy val `shindy-eventstore-spec`  = project.configs(DbTests)
+  .settings(
+    dbTestsCommonSettings,
+    libraryDependencies ++= Seq(
+      scalatest,
+      // todo: temporarily until 3.2.x is released
+      "org.scalatestplus" %% "scalacheck-1-14" % "3.1.0.0",
+      scalacheck,
+    )
+  )
+  .dependsOn(`shindy-eventstore`, examples)
 
-lazy val `shindy-eventstore-postgres` = project.configs(DbTests).settings (
+lazy val `shindy-eventstore-postgres` = project.configs(DbTests).settings(
   dbTestsCommonSettings,
   libraryDependencies ++= Seq(
     `circe-core`,
     `circe-parser`,
     `circe-generic`,
-    `fs2-core`,
+    zioInteropCats,
     postgresJdbcDriver,
     `doobie-postgres`,
     `doobie-hikari`,
@@ -118,9 +133,15 @@ lazy val `shindy-eventstore-postgres` = project.configs(DbTests).settings (
     pureconfig % Test
   ),
   dependencyOverrides += hikariCp
-).dependsOn(`shindy-hydrate`, examples % Test)
+).dependsOn(`shindy-eventstore`, `shindy-eventstore-spec` % Test)
 
 lazy val root = project in file(".") settings(
   name := "shindy",
   skip in publish := true,
-) aggregate(`shindy-core`, `shindy-hydrate`, `shindy-eventstore-postgres`, examples)
+) aggregate(
+  `shindy-core`,
+  `shindy-eventstore`,
+  `shindy-eventstore-spec`,
+  `shindy-eventstore-postgres`,
+  examples
+)

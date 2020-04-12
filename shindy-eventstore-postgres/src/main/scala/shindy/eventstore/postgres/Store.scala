@@ -1,37 +1,40 @@
 package shindy.eventstore.postgres
 
+import java.time.LocalDateTime
 import java.util.UUID
 
-import io.circe.syntax._
-import cats.Monad
-import cats.effect.Bracket
-import cats.instances.vector._
-import cats.syntax.functor._
+import cats.implicits._
 import doobie.implicits._
+import doobie.implicits.javatime._
 import doobie.postgres.implicits._
-import doobie.util.{fragment, update}
 import doobie.util.transactor.Transactor
 import doobie.util.update.Update
+import doobie.util.{Read, fragment, update}
+import io.circe.syntax._
 import io.circe.{Decoder, Encoder, Json}
-import shindy.hydration.{EventStore, VersionedEvent}
+import shindy.eventstore.{EventStore, VersionedEvent}
+import zio.Task
+import zio.interop.catz._
+import zio.stream._
+import zio.stream.interop.catz._
 
-import scala.language.higherKinds
+import JsonSupport._
 
 object Store {
-  def newStore[M[_] : Monad](xa: Transactor[M]) = new storePartiallyAppiled[M](xa)
+  def newStore(xa: Transactor[Task]) = new storePartiallyAppiled(xa)
 
-  class storePartiallyAppiled[M[_] : Monad](xa: Transactor[M]) {
-    def forAggregate[STATE: Decoder : Encoder, EVENT: Decoder : Encoder](aggregateType: String)(
-      implicit bracket: Bracket[M, Throwable]
-    ) = new Store[STATE, EVENT, M](aggregateType, xa)
+  class storePartiallyAppiled(xa: Transactor[Task]) {
+    def forAggregate[STATE: Decoder : Encoder, EVENT: Decoder : Encoder](aggregateType: String) =
+      new StoreZ[STATE, EVENT](aggregateType, xa)
   }
 
   private def selectEvents(aggregateId: UUID): fragment.Fragment =
     sql"select serial_num, aggregate_id, aggregate_type, aggregate_version, event_body, event_time from event" ++
       fr" where aggregate_id = $aggregateId"
 
+  import JsonSupport._
   private[postgres] val insertEvent: update.Update[(String, UUID, Int, Json)] =
-    Update("insert into event (aggregate_type, aggregate_id, aggregate_version, event_body) values (?,?,?,?)")
+    Update.apply[(String, UUID, Int, Json)]("insert into event (aggregate_type, aggregate_id, aggregate_version, event_body) values (?,?,?,?)")
 
   private[postgres] def insertState(aggregateId: UUID, version: Int, stateSnapshot: Json): doobie.Update0 =
     sql"""
@@ -56,33 +59,38 @@ object Store {
   }
 }
 
-class Store[STATE: Decoder : Encoder, EVENT: Decoder : Encoder, M[_]](aggregateType: String, xa: Transactor[M])(
-  implicit bracket: Bracket[M, Throwable],
-  monadM: Monad[M]
-) extends EventStore[STATE, EVENT, M] {
+class StoreZ[STATE: Decoder : Encoder, EVENT: Decoder : Encoder](
+  aggregateType: String, transactor: Transactor[Task]
+) extends EventStore.DefinedFor[EVENT, STATE] {
 
   import Store._
 
-  override def loadEvents(aggregateId: UUID, fromVersion: Option[Int]): fs2.Stream[M, VersionedEvent[EVENT]] = {
-    selectEvents(aggregateId, fromVersion).query[StoreEvent].stream.transact(xa)
-      .map(se => VersionedEvent(decodeFromJson[EVENT](se.eventBody), se.aggregateVersion))
-  }
+  implicitly[Read[UUID]]
+  implicitly[Read[LocalDateTime]]
+  implicitly[Read[Json]]
+  implicitly[Read[StoreEvent]]
+  override def loadEvents(aggregateId: UUID, fromVersion: Option[Int]): Task[Stream[Throwable, VersionedEvent[EVENT]]] =
+    selectEvents(aggregateId, fromVersion).query[StoreEvent]
+      .accumulate[Stream[Throwable, *]].transact(transactor)
+      .map { eventStream =>
+        eventStream.map(se => VersionedEvent(decodeFromJson[EVENT](se.eventBody), se.aggregateVersion))
+      }
 
-  override def storeEvents(aggregateId: UUID, events: Vector[VersionedEvent[EVENT]]): M[Unit] = {
+  override def storeEvents(aggregateId: UUID, events: Vector[VersionedEvent[EVENT]]): Task[Unit] = {
     val convertedEvents = events.map(ev => (aggregateType, aggregateId, ev.version, Encoder[EVENT].apply(ev.event)))
     insertEvent.updateMany(convertedEvents)
-      .transact(xa)
+      .transact(transactor)
       .map(_ => ())
   }
 
-  override def loadLatestStateSnapshot(aggregateId: UUID): M[Option[(STATE, Int)]] =
+  override def loadLatestStateSnapshot(aggregateId: UUID): Task[Option[(STATE, Int)]] =
     findStateSnapshot(aggregateId).query[StateSnapshot].map { lastSnapshot =>
       decodeFromJson[STATE](lastSnapshot.stateSnapshot) -> lastSnapshot.version
-    }.option.transact(xa)
+    }.option.transact(transactor)
 
-  override def storeSnapshot(aggregateId: UUID, state: STATE, version: Int): M[Int] = {
-    insertState(aggregateId, version, state.asJson).run.transact(xa)
-  }
+  override def storeSnapshot(aggregateId: UUID, state: STATE, version: Int): Task[Int] =
+    insertState(aggregateId, version, state.asJson).run.transact(transactor)
 
-  private def decodeFromJson[T: Decoder](json: Json) = Decoder[T].decodeJson(json).fold(throw _, identity)
+  private def decodeFromJson[T: Decoder](json: Json) =
+    Decoder[T].decodeJson(json).fold(throw _, identity)
 }

@@ -28,7 +28,7 @@ object EventSourced {
   /**
     * Produces new SourcedCreation without logging any events.
     */
-  def sourceState[STATE, EVENT](block: => Either[String, STATE]): SourcedCreation[STATE, EVENT, Unit] =
+  private[shindy] def sourceState[STATE, EVENT](block: => Either[String, STATE]): SourcedCreation[STATE, EVENT, Unit] =
     SourcedCreation(block, SourcedUpdate.pure(()))
 
   /**
@@ -48,9 +48,9 @@ object EventSourced {
     *
     * @param msg Error message
     */
-  def sourceError[STATE, EVENT, Out](msg: String): SourcedUpdate[STATE, EVENT, Out] =
+  def sourceError[STATE, EVENT](msg: String): SourcedUpdate[STATE, EVENT, Nothing] =
     SourcedUpdate {
-      ReaderWriterStateT.apply[Either[String, ?], Unit, Vector[EVENT], STATE, Out](
+      ReaderWriterStateT.apply[Either[String, *], Unit, Vector[EVENT], STATE, Nothing](
         (_, _) => Left(msg)
       )
     }
@@ -106,7 +106,7 @@ object EventSourced {
   }
 
   /**
-    * Builder that helps scala compiler infer all types but `STATE`
+    * Builder that helps scala compiler infer event type
     */
   class sourceNewPartiallyApplied[STATE] {
     def apply[EVENT](block: => Either[String, EVENT])(
@@ -118,7 +118,7 @@ object EventSourced {
       })
       val pureNop = SourcedUpdate.pure[STATE, EVENT](())
       // sourceUpdate is not just pure value but it has to hold creation event
-      // since the state was originated from event
+      // since the state was originated from an event
       val sourceUpdate = pureNop.flatMap[Unit] { _ =>
         eventEval.value match {
           case Left(msg) => sourceError(msg)
@@ -134,7 +134,7 @@ object EventSourced {
     */
   private def sourceInt[Out, EVENT, STATE](block: STATE => Either[String, (Vector[EVENT], Out)])(
     implicit eventHandler: EventHandler[STATE, EVENT]
-  ) = ReaderWriterStateT.apply[Either[String, ?], Unit, Vector[EVENT], STATE, Out] { (_, startState) =>
+  ) = ReaderWriterStateT.apply[Either[String, *], Unit, Vector[EVENT], STATE, Out] { (_, startState) =>
     block(startState).map { case (events, out) =>
       val finalState = events.foldLeft(startState) { case (state, event) =>
         eventHandler(Some(state), event)

@@ -5,7 +5,8 @@ import java.util.UUID
 
 import cats.syntax.either._
 import cats.syntax.option._
-import org.scalatest.{FreeSpec, Matchers}
+import org.scalatest.freespec.AnyFreeSpec
+import org.scalatest.matchers.should.Matchers
 import shindy.EventSourced.{EventHandler, source, sourceNew}
 
 import scala.language.{postfixOps, reflectiveCalls}
@@ -59,7 +60,7 @@ private object BusinessDomain {
   def suspend(): SourcedUpdate[UserRecord, Suspended, Unit] = source(_ => Suspended().asRight)
 }
 
-class EventSourcedSpec extends FreeSpec with Matchers {
+class EventSourcedSpec extends AnyFreeSpec with Matchers {
 
   import EventSourced._
 

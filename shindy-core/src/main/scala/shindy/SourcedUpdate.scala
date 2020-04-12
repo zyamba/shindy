@@ -4,14 +4,14 @@ import cats.instances.either._
 import cats.instances.vector._
 
 import scala.annotation.unchecked.uncheckedVariance
-import scala.language.{higherKinds, implicitConversions, reflectiveCalls}
+import scala.language.{implicitConversions, reflectiveCalls}
 
 object SourcedUpdate {
   def pure[STATE, EVENT] = new purePartiallyApplied[STATE, EVENT]
 
   class purePartiallyApplied[STATE, EVENT]() {
     def apply[A](a: A): SourcedUpdate[STATE, EVENT, A] = {
-      val pureRun = ReaderWriterStateT.pure[Either[String, ?], Unit, Vector[EVENT], STATE, A](a)
+      val pureRun = ReaderWriterStateT.pure[Either[String, *], Unit, Vector[EVENT], STATE, A](a)
       SourcedUpdate(pureRun)
     }
   }
@@ -36,8 +36,8 @@ object SourcedUpdate {
   * @tparam EVENT Event type
   * @tparam A Output type
   */
-case class SourcedUpdate[STATE, +EVENT, A](
-  run: ReaderWriterStateT[Either[String, ?], Unit, Vector[EVENT@uncheckedVariance], STATE, A]) {
+case class SourcedUpdate[STATE, +EVENT, +A](
+  run: ReaderWriterStateT[Either[String, *], Unit, Vector[EVENT@uncheckedVariance], STATE, A@uncheckedVariance]) {
 
   /**
     * Widen event type. Useful when using for comprehension instead of `andThen` method:
