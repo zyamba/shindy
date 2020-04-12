@@ -17,7 +17,6 @@ import shindy.examples.UserService._
 
 import scala.Function.tupled
 import scala.language.reflectiveCalls
-import cats.implicits._
 
 import scala.collection.compat._
 
@@ -32,9 +31,13 @@ trait EventStoreBehaviors
 
   private val snapshotIntervalValue: Int = 100
 
+  /**
+    * Defines typical behavior of EventStore.DefinedFor and tests against given
+    * implementation.
+    */
   protected def typicalEventStore(
       recordEventStore: EventStore.DefinedFor[UserRecordChangeEvent, UserRecord],
-  ) = {
+  ): Unit = {
     def runSync[A](
         stateRun: RIO[EventStore[UserRecordChangeEvent, UserRecord], A]
     ): Either[Throwable, A] = {
@@ -68,7 +71,7 @@ trait EventStoreBehaviors
         BirthdateUpdated(birthdate)
       )
       val versionedEvents =
-        events.zip(LazyList.from(1)).map(tupled(VersionedEvent.apply))
+        events.zip(events.indices.map(_ + 1)).map(tupled(VersionedEvent.apply))
       val task = recordEventStore.storeEvents(userId, versionedEvents)
       zioRuntime.unsafeRunSync(task)
 
@@ -101,9 +104,8 @@ trait EventStoreBehaviors
       runSync(updOp) should be(Symbol("right"))
 
       val events = loadEvents(userId)
-      events.map(_.version) should contain theSameElementsInOrderAs LazyList
-        .from(1)
-        .take(events.size)
+      events.map(_.version) should contain theSameElementsInOrderAs
+        events.indices.map(_ + 1)
     }
 
     "be able to persist new aggregate instances and apply updates" taggedAs DatabaseTest in {
