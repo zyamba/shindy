@@ -10,7 +10,13 @@ object Dependencies {
     val doobie = "0.8.8"
     val postgresqlJdbcDriver = "42.2.6"
     val hikariCp = "3.4.2"
+    val zio = "1.0.0-RC18-2"
   }
+
+  lazy val zio = "dev.zio" %% "zio" %  Versions.zio
+  lazy val zioStreams = "dev.zio" %% "zio-streams" %  Versions.zio
+
+  lazy val zioInteropCats = "dev.zio" %% "zio-interop-cats" % "2.0.0.0-RC12"
 
   lazy val `kind-projector` = "org.typelevel" % "kind-projector" % "0.10.3"
   
@@ -25,8 +31,6 @@ object Dependencies {
   lazy val `cats-core` = "org.typelevel" %% "cats-core" % Versions.cats
   lazy val `cats-effect` = "org.typelevel" %% "cats-effect" % Versions.cats
   lazy val `cats-macros` = "org.typelevel" %% "cats-macros" % Versions.cats
-
-  lazy val `fs2-core` = "co.fs2" %% "fs2-core" % Versions.fs2
 
   lazy val `circe-core` = "io.circe" %% "circe-core" % Versions.circe
   lazy val `circe-parser` = "io.circe" %% "circe-parser" % Versions.circe

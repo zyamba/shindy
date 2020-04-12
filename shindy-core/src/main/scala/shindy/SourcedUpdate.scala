@@ -36,8 +36,8 @@ object SourcedUpdate {
   * @tparam EVENT Event type
   * @tparam A Output type
   */
-case class SourcedUpdate[STATE, +EVENT, A](
-  run: ReaderWriterStateT[Either[String, ?], Unit, Vector[EVENT@uncheckedVariance], STATE, A]) {
+case class SourcedUpdate[STATE, +EVENT, +A](
+  run: ReaderWriterStateT[Either[String, ?], Unit, Vector[EVENT@uncheckedVariance], STATE, A@uncheckedVariance]) {
 
   /**
     * Widen event type. Useful when using for comprehension instead of `andThen` method:
