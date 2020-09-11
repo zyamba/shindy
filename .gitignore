@@ -5,4 +5,5 @@ scalastyle-config.xml
 .bloop
 .idea
 .metals
+.vscode
 project/metals.sbt

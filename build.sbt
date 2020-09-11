@@ -22,14 +22,13 @@ inThisBuild(
       `scala-collection-compat`, // Scala 2.13 collection compatibility
       scalactic,
       scalatest % Test,
-      // todo: temporarily until 3.2.x is released
-      "org.scalatestplus" %% "scalacheck-1-14" % "3.1.0.0" % Test,
+      scalatestplus % Test,
       scalacheck % Test
     ),
 
     dependencyOverrides ++= Seq(
       `cats-core`,
-      `cats-macros`
+      `zio`,
     ),
 
     scmInfo := Some(
@@ -112,8 +111,7 @@ lazy val `shindy-eventstore-spec`  = project.configs(DbTests)
     dbTestsCommonSettings,
     libraryDependencies ++= Seq(
       scalatest,
-      // todo: temporarily until 3.2.x is released
-      "org.scalatestplus" %% "scalacheck-1-14" % "3.1.0.0",
+      scalatestplus,
       scalacheck,
     )
   )
