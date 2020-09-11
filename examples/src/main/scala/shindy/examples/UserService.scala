@@ -53,9 +53,9 @@ object UserService {
   }
 
   def addAddress(country: String, zip: String, strLine1: String, strLine2: Option[String] = None,
-    state: Option[String] = None): SourcedUpdate[UserRecord, AddressAdded, Unit] = sourceOut { _ =>
+    state: Option[String] = None): SourcedUpdate[UserRecord, AddressAdded, Unit] = source { _ =>
       Either.cond(country.nonEmpty && strLine1.nonEmpty && zip.nonEmpty,
-        AddressAdded(Address(country, zip, strLine1, strLine2, state)) -> "",
+        AddressAdded(Address(country, zip, strLine1, strLine2, state)),
         "Invalid address"
       )
     }
