@@ -7,7 +7,7 @@ import zio.stream.Stream
 
 object EventStore {
   trait Service {
-    def ofType[E : zio.Tagged, S : zio.Tagged](aggregateId: String): DefinedFor[E, S]
+    def ofType[E : zio.Tag, S : zio.Tag](aggregateId: String): DefinedFor[E, S]
   }
 
   trait DefinedFor[EVENT, STATE] {

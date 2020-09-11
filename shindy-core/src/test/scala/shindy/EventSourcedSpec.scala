@@ -11,62 +11,13 @@ import shindy.EventSourced.{EventHandler, source, sourceNew}
 
 import scala.language.{postfixOps, reflectiveCalls}
 
-private object BusinessDomain {
-
-  // state
-  sealed trait UserRecord
-
-  sealed case class UserRecordActive(id: UUID, email: String, birthdate: Option[LocalDate] = None) extends UserRecord
-
-  sealed case class UserRecordInactive(suspended: UserRecordActive) extends UserRecord
-
-  // events
-  sealed trait UserRecordChangeEvent extends Product with Serializable
-
-  case class UserCreated(id: UUID, email: String) extends UserRecordChangeEvent
-
-  case class EmailUpdated(newEmail: String) extends UserRecordChangeEvent
-
-  case class BirthdateUpdated(birthdate: LocalDate) extends UserRecordChangeEvent
-
-  case class Suspended() extends UserRecordChangeEvent
-
-  // state machine
-  implicit val eventHandler: EventHandler[UserRecord, UserRecordChangeEvent] = EventHandler {
-    case (None, ev: UserCreated) => UserRecordActive(ev.id, ev.email)
-
-    case (Some(s: UserRecordActive), ev: EmailUpdated) => s.copy(email = ev.newEmail)
-
-    case (Some(u: UserRecordActive), BirthdateUpdated(newDate)) => u.copy(birthdate = Some(newDate))
-  }
-
-  // business logic
-  def createUser(id: UUID, email: String): SourcedCreation[UserRecord, UserCreated, UUID] =
-    sourceNew[UserRecord](UserCreated(id, email).asRight).map(_ => id)
-
-  def updateEmail(email: String): SourcedUpdate[UserRecord, EmailUpdated, Unit] = source {
-    _: UserRecord => Either.cond(email.contains("@"), EmailUpdated(email), "email is invalid")
-  }
-
-  def changeBirthdate(datetime: LocalDate): SourcedUpdate[UserRecord, BirthdateUpdated, Unit] = source {
-    _: UserRecord =>
-      Either.cond(
-        datetime.isBefore(LocalDate.of(2018, 1, 1)),
-        BirthdateUpdated(datetime),
-        "Too young!"
-      )
-  }
-
-  def suspend(): SourcedUpdate[UserRecord, Suspended, Unit] = source(_ => Suspended().asRight)
-}
-
 class EventSourcedSpec extends AnyFreeSpec with Matchers {
 
   import EventSourced._
 
 
   "Basic functionality" - {
-    import BusinessDomain._
+    import UserRecordService._
 
     "should be able to capture creation event" in {
       val email = "test@yahoo.com"
@@ -79,6 +30,15 @@ class EventSourcedSpec extends AnyFreeSpec with Matchers {
       events should have size 1
       events.head shouldEqual UserCreated(userId, email)
 
+      state shouldEqual UserRecordActive(userId, email)
+    }
+
+    "should be able to get latest state by calling 'get'" in {
+      val email = "test@yahoo.com"
+      val userId = UUID.randomUUID()
+      val Right((_, state, stateOut)) = createUser(userId, email).get run
+
+      state shouldEqual stateOut
       state shouldEqual UserRecordActive(userId, email)
     }
 
@@ -112,23 +72,19 @@ class EventSourcedSpec extends AnyFreeSpec with Matchers {
           updateEmail(happyBirthdayEmail).map(_ => happyBirthdayMsg)
         )
 
-      val stateFalse = UserRecordActive(UUID.randomUUID(), "test@test.com")
+      val stateDoesNotMatchCond = UserRecordActive(UUID.randomUUID(), "test@test.com")
 
       {
-        val results = conditionalUpdate run stateFalse
-        results should be(Symbol("right"))
-        val Right((events, state, out)) = results
+        val Right((events, state, out)) = conditionalUpdate run stateDoesNotMatchCond
         events should be(empty)
-        state shouldEqual stateFalse
+        state shouldEqual stateDoesNotMatchCond
         out shouldBe None
       }
 
-      val stateTrue = stateFalse.copy(birthdate = Some(LocalDate.of(2000, 1, 1)))
+      val stateMatchesCond = stateDoesNotMatchCond.copy(birthdate = Some(LocalDate.of(2000, 1, 1)))
 
       {
-        val results = conditionalUpdate run stateTrue
-        results should be(Symbol("right"))
-        val Right((events, state, out)) = results
+        val Right((events, state, out)) = conditionalUpdate run stateMatchesCond
         events should have size 1
         events.head shouldEqual EmailUpdated(happyBirthdayEmail)
         state.asInstanceOf[UserRecordActive].email shouldEqual happyBirthdayEmail
@@ -280,7 +236,7 @@ class EventSourcedSpec extends AnyFreeSpec with Matchers {
 
   "EventHandler" - {
     "should throw RuntimeException if there is no handler for the event" in {
-      import BusinessDomain._
+      import UserRecordService._
 
       val userRecordState = UserRecordActive(UUID.randomUUID(), "test@test.com")
       val exception = the[RuntimeException] thrownBy suspend().run(userRecordState)
