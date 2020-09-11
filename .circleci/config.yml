@@ -29,12 +29,6 @@ jobs:
             - v2-dependencies-{{ checksum "project/Dependencies.scala" }}
             # fallback to using the latest cache if no exact match is found
             - v2-dependencies-
-      - run:
-          name: Setup Code Climate test-reporter
-          command: |
-            # download test reporter as a static binary
-            curl -L https://codeclimate.com/downloads/test-reporter/test-reporter-latest-linux-amd64 > ./cc-test-reporter
-            chmod +x ./cc-test-reporter
 
       # fetch dependencies
       - run: cat /dev/null | sbt +test:compile
@@ -65,14 +59,3 @@ jobs:
           name: Codecov report
           command: |
             bash <(curl -s https://codecov.io/bash)
-        
-
-      - run:
-          name: Format coverage report
-          command: |
-            ./cc-test-reporter format-coverage target/scala-*/coverage-report/cobertura.xml --input-type=cobertura
-
-      - run:
-          name: Upload coverage report
-          command: |
-            ./cc-test-reporter upload-coverage

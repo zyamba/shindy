@@ -33,6 +33,15 @@ class EventSourcedSpec extends AnyFreeSpec with Matchers {
       state shouldEqual UserRecordActive(userId, email)
     }
 
+    "should be able to get latest state by calling 'get'" in {
+      val email = "test@yahoo.com"
+      val userId = UUID.randomUUID()
+      val Right((_, state, stateOut)) = createUser(userId, email).get run
+
+      state shouldEqual stateOut
+      state shouldEqual UserRecordActive(userId, email)
+    }
+
     "should be able to execute update of the given state" in {
       val updEmail = "new@yahoo.com"
       val results = updateEmail(updEmail) run UserRecordActive(UUID.randomUUID(), "original@google.com", None)
@@ -63,23 +72,19 @@ class EventSourcedSpec extends AnyFreeSpec with Matchers {
           updateEmail(happyBirthdayEmail).map(_ => happyBirthdayMsg)
         )
 
-      val stateFalse = UserRecordActive(UUID.randomUUID(), "test@test.com")
+      val stateDoesNotMatchCond = UserRecordActive(UUID.randomUUID(), "test@test.com")
 
       {
-        val results = conditionalUpdate run stateFalse
-        results should be(Symbol("right"))
-        val Right((events, state, out)) = results
+        val Right((events, state, out)) = conditionalUpdate run stateDoesNotMatchCond
         events should be(empty)
-        state shouldEqual stateFalse
+        state shouldEqual stateDoesNotMatchCond
         out shouldBe None
       }
 
-      val stateTrue = stateFalse.copy(birthdate = Some(LocalDate.of(2000, 1, 1)))
+      val stateMatchesCond = stateDoesNotMatchCond.copy(birthdate = Some(LocalDate.of(2000, 1, 1)))
 
       {
-        val results = conditionalUpdate run stateTrue
-        results should be(Symbol("right"))
-        val Right((events, state, out)) = results
+        val Right((events, state, out)) = conditionalUpdate run stateMatchesCond
         events should have size 1
         events.head shouldEqual EmailUpdated(happyBirthdayEmail)
         state.asInstanceOf[UserRecordActive].email shouldEqual happyBirthdayEmail

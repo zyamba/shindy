@@ -12,7 +12,7 @@ import scala.language.reflectiveCalls
 
 private[shindy] object HydratedZ {
 
-  def createNew[STATE : zio.Tagged, EVENT : zio.Tagged](
+  def createNew[STATE : zio.Tag, EVENT : zio.Tag](
     sc: SourcedCreation[STATE, EVENT, UUID],
     snapshotInterval: Option[Int] = None
   )(
@@ -24,7 +24,7 @@ private[shindy] object HydratedZ {
       snapshotInterval
     )
 
-  def hydrate[STATE : zio.Tagged, EVENT : zio.Tagged](
+  def hydrate[STATE : zio.Tag, EVENT : zio.Tag](
     aggregateId: UUID,
     snapshotInterval: Option[Int] = None
   )(

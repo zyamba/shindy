@@ -92,15 +92,15 @@ object EventSourced {
   /**
     * Conditionally execute given update if the current state of type [[S]]
     *
-    * @param up Conditional update operation
+    * @param upd Conditional update operation
     * @tparam S Expected state of the state machine
     */
   def whenStateIs[STATE, S <: STATE : ClassTag, EVENT, B](
-    up: S => SourcedUpdate[STATE, EVENT, B]
+    upd: S => SourcedUpdate[STATE, EVENT, B]
   ): SourcedUpdate[STATE, EVENT, Option[B]] = {
     val nop: SourcedUpdate[STATE, EVENT, Option[B]] = SourcedUpdate.pure(None)
     nop.get.flatMap {
-      case s: S => up(s).map(Option.apply)
+      case s: S => upd(s).map(Option.apply)
       case _ => nop
     }
   }
