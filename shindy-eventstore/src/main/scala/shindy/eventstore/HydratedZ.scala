@@ -67,7 +67,7 @@ private[shindy] object HydratedZ {
   * @tparam EVENT Type of the event
   * @tparam A     Output value type
   */
-private class HydratedZ[STATE: zio.Tagged, EVENT: zio.Tagged, A](
+private class HydratedZ[STATE: zio.Tag, EVENT: zio.Tag, A](
   scLoad: RIO[EventStore[EVENT, STATE], SourcedCreation[STATE, EVENT, (UUID, Int, Int)]],
   sourcedUpdate: SourcedUpdate[STATE, EVENT, A],
   snapshotInterval: Option[Int]

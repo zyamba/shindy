@@ -94,7 +94,8 @@ lazy val `shindy-core` = project settings (
 )
 
 lazy val examples = project.settings(
-  skip in publish := true
+  skip in publish := true,
+  coverageEnabled := false
 ).dependsOn(`shindy-core`)
 
 lazy val `shindy-eventstore`  = project

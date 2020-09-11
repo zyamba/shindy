@@ -23,13 +23,13 @@ trait Hydration[STATE, EVENT] {
 
   def createNew(sourcedCreation: SourcedCreation[STATE, EVENT, UUID])(
     implicit eventHandler: EventHandler[STATE, EVENT],
-    classTagEvent: zio.Tagged[EVENT],
-    classTagState: zio.Tagged[STATE]
+    classTagEvent: zio.Tag[EVENT],
+    classTagState: zio.Tag[STATE]
   ): Hydrated[STATE, EVENT, Unit] = HydratedZ.createNew(sourcedCreation, stateSnapshotInterval)
 
   def hydrate(aggregateId: UUID)(
     implicit eventHandler: EventHandler[STATE, EVENT],
-    classTagEvent: zio.Tagged[EVENT],
-    classTagState: zio.Tagged[STATE]
+    classTagEvent: zio.Tag[EVENT],
+    classTagState: zio.Tag[STATE]
   ): Hydrated[STATE, EVENT, Unit] = HydratedZ.hydrate(aggregateId, stateSnapshotInterval)
 }
