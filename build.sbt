@@ -1,5 +1,4 @@
 import Dependencies._
-import ReleaseTransformations._
 import sbt.Keys.testOptions
 import sbt.Tests
 
@@ -8,9 +7,9 @@ inThisBuild(
     organization := "io.github.zyamba",
     organizationName := "zyamba",
     organizationHomepage := Some(url("https://github.com/zyamba")),
-    scalaVersion := "2.13.1",
+    scalaVersion := "2.12.15",
 
-    crossScalaVersions := Seq("2.13.1", "2.12.8"),
+    crossScalaVersions := Seq("2.13.8", "2.12.15"),
 
     resolvers += Resolver.sonatypeRepo("releases"),
 
@@ -43,7 +42,7 @@ inThisBuild(
         id    = "ivanobulo",
         name  = "Ivan Luzyanin",
         email = "ivanobulo@gmail.com",
-        url   = url("http://twitter.com/ivanobulo")
+        url   = url("https://twitter.com/ivanobulo")
       )
     ),
 
@@ -55,36 +54,21 @@ inThisBuild(
   )
 )
 
-ThisBuild / publishTo := sonatypePublishToBundle.value
+// Remove all additional repository other than Maven Central from POM
+ThisBuild / pomIncludeRepository := { _ => false }
+ThisBuild / publishTo := {
+  val nexus = "https://oss.sonatype.org/"
+  if (isSnapshot.value) Some("snapshots" at nexus + "content/repositories/snapshots")
+  else Some("releases" at nexus + "service/local/staging/deploy/maven2")
+}
 ThisBuild / publishMavenStyle := true
-
-ThisBuild / useGpg := true
-
-ThisBuild / releasePublishArtifactsAction := PgpKeys.publishSigned.value
-
-ThisBuild / releaseCrossBuild := true
-ThisBuild / releaseProcess := Seq[ReleaseStep](
-  checkSnapshotDependencies,
-  inquireVersions,
-  runClean,
-  runTest,
-  setReleaseVersion,
-  commitReleaseVersion,
-  tagRelease,
-  // For non cross-build projects, use releaseStepCommand("publishSigned")
-  releaseStepCommandAndRemaining("+publishSigned"),
-  setNextVersion,
-  commitNextVersion,
-  releaseStepCommand("sonatypeReleaseAll"),
-  pushChanges
-)
 
 val DbTests = config("db").extend(Test)
 configs(DbTests)
 
 lazy val dbTestsCommonSettings = inConfig(DbTests)(Defaults.testTasks) ++ Seq(
-  testOptions in Test := Tests.Argument("-l", "DatabaseTest") :: Nil,
-  testOptions in DbTests := Tests.Argument("-n", "DatabaseTest") :: Nil
+  Test / testOptions := Tests.Argument("-l", "DatabaseTest") :: Nil,
+  DbTests / testOptions := Tests.Argument("-n", "DatabaseTest") :: Nil
 )
 
 lazy val `shindy-core` = project settings (
@@ -94,7 +78,7 @@ lazy val `shindy-core` = project settings (
 )
 
 lazy val examples = project.settings(
-  skip in publish := true,
+  publish / skip := true,
   coverageEnabled := false
 ).dependsOn(`shindy-core`)
 
@@ -136,7 +120,7 @@ lazy val `shindy-eventstore-postgres` = project.configs(DbTests).settings(
 
 lazy val root = project in file(".") settings(
   name := "shindy",
-  skip in publish := true,
+  publish / skip := true,
 ) aggregate(
   `shindy-core`,
   `shindy-eventstore`,
