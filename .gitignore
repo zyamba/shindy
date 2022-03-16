@@ -3,6 +3,7 @@ target
 .idea
 scalastyle-config.xml
 .bloop
+.bsp
 .idea
 .metals
 .vscode
