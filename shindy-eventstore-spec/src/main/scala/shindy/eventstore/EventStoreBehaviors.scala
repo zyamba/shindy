@@ -2,8 +2,6 @@ package shindy.eventstore
 
 import cats.effect._
 import cats.effect.testing.scalatest.AsyncIOSpec
-import org.scalacheck.Arbitrary.arbitrary
-import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest.Tag
 import org.scalatest.freespec.AsyncFreeSpec
 import org.scalatest.matchers.should.Matchers
@@ -11,8 +9,8 @@ import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import shindy.examples.UserService._
 import shindy.{EventSourced, SourcedCreation, SourcedUpdate}
 
-import java.time.{LocalDate, ZoneId}
-import java.util.{Calendar, UUID}
+import java.time.LocalDate
+import java.util.UUID
 import scala.Function.tupled
 import scala.language.reflectiveCalls
 
@@ -216,16 +214,4 @@ trait EventStoreBehaviors
 
   override protected final def stateSnapshotInterval: Option[Int] =
     Some(snapshotIntervalValue)
-
-  private val userRecGen = for {
-    id <- arbitrary[UUID]
-    email <- Gen.alphaStr.suchThat(_.nonEmpty).map(_ + "@test.com")
-    arbDate <- Gen.option(
-      arbitrary[Calendar]
-        .map(_.toInstant.atZone(ZoneId.systemDefault()))
-        .map(_.toLocalDate)
-    )
-  } yield UserRecord(id, email, arbDate)
-
-  implicit val arbUserRecGen: Arbitrary[UserRecord] = Arbitrary(userRecGen)
 }
