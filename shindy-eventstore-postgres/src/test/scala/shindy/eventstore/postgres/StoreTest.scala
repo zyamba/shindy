@@ -3,6 +3,7 @@ package shindy.eventstore.postgres
 import cats.Eval
 import cats.data.Kleisli
 import cats.effect.IO
+import cats.effect.unsafe.IORuntime
 import doobie._
 import doobie.implicits.javasql._
 import doobie.postgres._
@@ -68,7 +69,7 @@ trait StoreInitializer {
       dbConf.username,
       dbConf.password
     )
-    tx.exec.apply(executeCreateDbScript)
+    tx.exec.apply(executeCreateDbScript).unsafeRunAndForget()(IORuntime.global)
     tx
   }
 }
@@ -95,6 +96,7 @@ class StoreTest extends AsyncFreeSpec
   }
 
   "SQL statement checks" - {
+    Read[Option[LocalDateTime]]
 
     "insert event statement " taggedAs DatabaseTest in IO {
       check(Store.insertEvent)
