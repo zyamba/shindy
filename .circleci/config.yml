@@ -45,7 +45,7 @@ jobs:
             cat /dev/null | sbt clean +test:compile
 
       - run:
-          name: Run only 2.13 tests with coverage
+          name: Run only tests with coverage
           command: |
             cat /dev/null | sbt clean coverage test:test db:test coverageReport coverageAggregate
 

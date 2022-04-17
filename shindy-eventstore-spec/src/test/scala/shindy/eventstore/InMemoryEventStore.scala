@@ -1,9 +1,8 @@
 package shindy.eventstore
 
+import cats.effect.IO
+
 import java.util.UUID
-
-import zio.{Task, stream}
-
 import scala.collection.mutable
 import scala.language.reflectiveCalls
 
@@ -13,22 +12,16 @@ private class InMemoryEventStore[EVENT, STATE](
       ]] = mutable.Map.empty[UUID, Vector[VersionedEvent[EVENT]]],
       val stateSnapshot: mutable.Map[UUID, (STATE, Int)] =
         mutable.Map.empty[UUID, (STATE, Int)]
-  ) extends EventStore.DefinedFor[EVENT, STATE] {
+  ) extends EventStore[EVENT, STATE, IO] {
 
-    override def loadEvents(
-        aggregateId: UUID,
-        fromVersion: Option[Int]
-    ): Task[stream.Stream[Throwable, VersionedEvent[EVENT]]] = Task {
-      stream.Stream.fromIterable {
-        val minVersion = fromVersion.getOrElse(0)
-        eventsStore(aggregateId).filter(_.version >= minVersion)
-      }
-    }
+  override def loadEvents(aggregateId: UUID, fromVersion: Option[Int]): fs2.Stream[IO, VersionedEvent[EVENT]] = {
+    fs2.Stream.evalSeq( IO {
+      val minVersion = fromVersion.getOrElse(0)
+      eventsStore(aggregateId).filter(_.version >= minVersion)
+    })
+  }
 
-    override def storeEvents(
-        aggregateId: UUID,
-        events: Vector[VersionedEvent[EVENT]]
-    ): Task[Unit] = Task {
+  override def storeEvents(aggregateId: UUID, events: Vector[VersionedEvent[EVENT]]): IO[Unit] = IO {
       val storedEvents = eventsStore.getOrElseUpdate(aggregateId, Vector.empty)
       val products: Vector[VersionedEvent[EVENT]] =
         storedEvents ++ events
@@ -37,7 +30,7 @@ private class InMemoryEventStore[EVENT, STATE](
 
     override def loadLatestStateSnapshot(
         aggregateId: UUID
-    ): Task[Option[(STATE, Int)]] = Task {
+    ): IO[Option[(STATE, Int)]] = IO {
       stateSnapshot.get(aggregateId)
     }
 
@@ -45,7 +38,7 @@ private class InMemoryEventStore[EVENT, STATE](
         aggregateId: UUID,
         state: STATE,
         version: Int
-    ): Task[Int] = Task {
+    ): IO[Int] = IO {
       stateSnapshot.update(aggregateId, state -> version)
       1
     }

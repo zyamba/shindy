@@ -1,11 +1,9 @@
 package shindy.eventstore.postgres
 
-import java.time.LocalDateTime
-import java.util.UUID
-
+import cats.Monad
+import cats.effect._
 import cats.implicits._
 import doobie.implicits._
-import doobie.implicits.javatime._
 import doobie.postgres.implicits._
 import doobie.util.transactor.Transactor
 import doobie.util.update.Update
@@ -13,26 +11,22 @@ import doobie.util.{Read, fragment, update}
 import io.circe.syntax._
 import io.circe.{Decoder, Encoder, Json}
 import shindy.eventstore.{EventStore, VersionedEvent}
-import zio.Task
-import zio.interop.catz._
-import zio.stream._
-import zio.stream.interop.catz._
+import shindy.eventstore.postgres.JsonSupport._
 
-import JsonSupport._
+import java.time.LocalDateTime
+import java.util.UUID
 
 object Store {
-  def newStore(xa: Transactor[Task]) = new storePartiallyAppiled(xa)
+  def newStore[F[_] : MonadCancelThrow](xa: Transactor[F]) = new storePartiallyAppiled(xa)
 
-  class storePartiallyAppiled(xa: Transactor[Task]) {
+  class storePartiallyAppiled[F[_] : Monad : MonadCancelThrow](xa: Transactor[F]) {
     def forAggregate[STATE: Decoder : Encoder, EVENT: Decoder : Encoder](aggregateType: String) =
-      new StoreZ[STATE, EVENT](aggregateType, xa)
+      new StoreZ[STATE, EVENT, F](aggregateType, xa)
   }
 
   private def selectEvents(aggregateId: UUID): fragment.Fragment =
     sql"select serial_num, aggregate_id, aggregate_type, aggregate_version, event_body, event_time from event" ++
       fr" where aggregate_id = $aggregateId"
-
-  import JsonSupport._
   private[postgres] val insertEvent: update.Update[(String, UUID, Int, Json)] =
     Update.apply[(String, UUID, Int, Json)]("insert into event (aggregate_type, aggregate_id, aggregate_version, event_body) values (?,?,?,?)")
 
@@ -59,9 +53,9 @@ object Store {
   }
 }
 
-class StoreZ[STATE: Decoder : Encoder, EVENT: Decoder : Encoder](
-  aggregateType: String, transactor: Transactor[Task]
-) extends EventStore.DefinedFor[EVENT, STATE] {
+class StoreZ[STATE: Decoder : Encoder, EVENT: Decoder : Encoder, F[_] : Monad : MonadCancelThrow](
+  aggregateType: String, transactor: Transactor[F]
+) extends EventStore[EVENT, STATE, F] {
 
   import Store._
 
@@ -69,28 +63,27 @@ class StoreZ[STATE: Decoder : Encoder, EVENT: Decoder : Encoder](
   implicitly[Read[LocalDateTime]]
   implicitly[Read[Json]]
   implicitly[Read[StoreEvent]]
-  override def loadEvents(aggregateId: UUID, fromVersion: Option[Int]): Task[Stream[Throwable, VersionedEvent[EVENT]]] =
-    selectEvents(aggregateId, fromVersion).query[StoreEvent]
-      .accumulate[Stream[Throwable, *]].transact(transactor)
-      .map { eventStream =>
-        eventStream.map(se => VersionedEvent(decodeFromJson[EVENT](se.eventBody), se.aggregateVersion))
-      }
 
-  override def storeEvents(aggregateId: UUID, events: Vector[VersionedEvent[EVENT]]): Task[Unit] = {
+  override def loadEvents(aggregateId: UUID, fromVersion: Option[Int]): fs2.Stream[F, VersionedEvent[EVENT]] =
+    selectEvents(aggregateId, fromVersion).query[StoreEvent]
+      .stream.transact(transactor)
+      .map(se => VersionedEvent(decodeFromJson[EVENT](se.eventBody), se.aggregateVersion))
+
+  override def storeEvents(aggregateId: UUID, events: Vector[VersionedEvent[EVENT]]): F[Unit] = {
     val convertedEvents = events.map(ev => (aggregateType, aggregateId, ev.version, Encoder[EVENT].apply(ev.event)))
     insertEvent.updateMany(convertedEvents)
       .transact(transactor)
       .map(_ => ())
   }
 
-  override def loadLatestStateSnapshot(aggregateId: UUID): Task[Option[(STATE, Int)]] =
+  override def loadLatestStateSnapshot(aggregateId: UUID): F[Option[(STATE, Int)]] =
     findStateSnapshot(aggregateId).query[StateSnapshot].map { lastSnapshot =>
       decodeFromJson[STATE](lastSnapshot.stateSnapshot) -> lastSnapshot.version
     }.option.transact(transactor)
 
-  override def storeSnapshot(aggregateId: UUID, state: STATE, version: Int): Task[Int] =
+  override def storeSnapshot(aggregateId: UUID, state: STATE, version: Int): F[Int] =
     insertState(aggregateId, version, state.asJson).run.transact(transactor)
 
-  private def decodeFromJson[T: Decoder](json: Json) =
+  private def decodeFromJson[T: Decoder](json: Json): T =
     Decoder[T].decodeJson(json).fold(throw _, identity)
 }
