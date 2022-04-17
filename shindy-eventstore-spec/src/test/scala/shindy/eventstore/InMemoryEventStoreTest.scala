@@ -1,14 +1,15 @@
 package shindy.eventstore
 
-import org.scalatest.freespec.AnyFreeSpec
+import cats.effect.IO
+import org.scalatest.freespec.AsyncFreeSpec
 import shindy.examples.UserService._
 
 import scala.language.reflectiveCalls
 
-class SimpleEventStoreTest extends AnyFreeSpec with EventStoreBehaviors {
+class InMemoryEventStoreshiTest extends AsyncFreeSpec with EventStoreBehaviors {
 
   val recordEventStore
-      : EventStore.DefinedFor[UserRecordChangeEvent, UserRecord] =
+      : EventStore[UserRecordChangeEvent, UserRecord, IO] =
     new InMemoryEventStore[UserRecordChangeEvent, UserRecord]()
 
   "Using in-memory event store implementation it should" - {

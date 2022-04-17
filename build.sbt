@@ -7,9 +7,7 @@ inThisBuild(
     organization := "io.github.zyamba",
     organizationName := "zyamba",
     organizationHomepage := Some(url("https://github.com/zyamba")),
-    scalaVersion := "2.12.15",
-
-    crossScalaVersions := Seq("2.13.8", "2.12.15"),
+    scalaVersion := "2.13.8",
 
     resolvers += Resolver.sonatypeRepo("releases"),
 
@@ -27,7 +25,6 @@ inThisBuild(
 
     dependencyOverrides ++= Seq(
       `cats-core`,
-      `zio`,
     ),
 
     scmInfo := Some(
@@ -85,8 +82,9 @@ lazy val examples = project.settings(
 lazy val `shindy-eventstore`  = project
   .settings(
     libraryDependencies ++= Seq(
-      zio,
-      zioStreams,
+      `cats-core`,
+      `cats-effect`,
+      fs2,
     ),
     coverageEnabled := false, // eventstore-spec has the test
   ).dependsOn(`shindy-core`)
@@ -95,6 +93,9 @@ lazy val `shindy-eventstore-spec`  = project.configs(DbTests)
   .settings(
     dbTestsCommonSettings,
     libraryDependencies ++= Seq(
+      `cats-core`,
+      `cats-effect`,
+      `cats-effect-testing`,
       scalatest,
       scalatestplus,
       scalacheck,
@@ -108,10 +109,9 @@ lazy val `shindy-eventstore-postgres` = project.configs(DbTests).settings(
     `circe-core`,
     `circe-parser`,
     `circe-generic`,
-    zioInteropCats,
     postgresJdbcDriver,
     `doobie-postgres`,
-    `doobie-hikari`,
+    `doobie-hikari` % Test,
     `doobie-scalatest` % Test,
     pureconfig % Test
   ),

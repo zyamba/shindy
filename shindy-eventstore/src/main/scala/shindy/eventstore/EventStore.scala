@@ -1,29 +1,24 @@
 package shindy.eventstore
 
+import fs2.Stream
+
 import java.util.UUID
 
-import zio.Task
-import zio.stream.Stream
+trait EventStore[EVENT, STATE, F[_]] {
 
-object EventStore {
-  trait Service {
-    def ofType[E : zio.Tag, S : zio.Tag](aggregateId: String): DefinedFor[E, S]
-  }
+  def loadEvents(aggregateId: UUID, fromVersion: Option[Int] = None): Stream[F, VersionedEvent[EVENT]]
 
-  trait DefinedFor[EVENT, STATE] {
-    def loadEvents(aggregateId: UUID, fromVersion: Option[Int] = None): Task[Stream[Throwable, VersionedEvent[EVENT]]]
+  def storeEvents(aggregateId: UUID, event: Vector[VersionedEvent[EVENT]]): F[Unit]
 
-    def storeEvents(aggregateId: UUID, event: Vector[VersionedEvent[EVENT]]): Task[Unit]
+  /** Loads latest snapshot from event store. If the event store supports snapshoting it will return latest snapshot
+    * available and its version.
+    *
+    * @param aggregateId
+    *   Aggregate ID
+    * @return
+    *   latest state snapshot and its version for given aggregate.
+    */
+  def loadLatestStateSnapshot(aggregateId: UUID): F[Option[(STATE, Int)]]
 
-    /**
-      * Loads latest snapshot from event store. If the event store supports snapshoting
-      * it will return latest snapshot available and its version.
-      *
-      * @param aggregateId Aggregate ID
-      * @return latest state snapshot and its version for given aggregate.
-      */
-    def loadLatestStateSnapshot(aggregateId: UUID): Task[Option[(STATE, Int)]]
-
-    def storeSnapshot(aggregateId: UUID, state: STATE, version: Int): Task[Int]
-  }
+  def storeSnapshot(aggregateId: UUID, state: STATE, version: Int): F[Int]
 }
