@@ -9,7 +9,7 @@ inThisBuild(
     organizationHomepage := Some(url("https://github.com/zyamba")),
     scalaVersion := "2.13.8",
 
-    resolvers += Resolver.sonatypeRepo("releases"),
+    resolvers ++= Resolver.sonatypeOssRepos("releases"),
 
     addCompilerPlugin(`kind-projector` cross CrossVersion.binary),
 

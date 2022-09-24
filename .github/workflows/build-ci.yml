@@ -15,9 +15,9 @@ jobs:
       postgres:
         image: postgres
         env:
-          POSTGRES_PASSWORD: eventstore
+          POSTGRES_DB: eventstore
           POSTGRES_USER: eventstore
-          POSTGRES_DB: essecret
+          POSTGRES_PASSWORD: essecret
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
