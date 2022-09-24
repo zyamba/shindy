@@ -1,0 +1,44 @@
+name: Scala CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_PASSWORD: eventstore
+          POSTGRES_USER: eventstore
+          POSTGRES_DB: essecret
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    steps:
+      - uses: actions/checkout@v2
+      - name: Setup JDK
+        uses: actions/setup-java@v3
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: sbt
+      - name: Run tests
+        run: sbt coverage test
+      - name: Coverage Report
+        run: |
+          sbt clean coverage test db:test coverageReport coverageAggregate
+      - name: "Upload coverage to Codecov"
+        uses: "codecov/codecov-action@v2"
+        with:
+          fail_ci_if_error: true
