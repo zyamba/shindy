@@ -17,7 +17,7 @@ import java.time.LocalDateTime
 import java.util.UUID
 
 object Store:
-  def newStore[F[_]: MonadCancelThrow : Transactor: Concurrent] = new storePartiallyApplied[F]()
+  def newStore[F[_]: MonadCancelThrow: Transactor: Concurrent] = new storePartiallyApplied[F]()
 
   class storePartiallyApplied[F[_]: Monad: MonadCancelThrow]()(using xa: Transactor[F], concurrent: Concurrent[F]):
     def forAggregate[STATE: Decoder: Encoder, EVENT: Decoder: Encoder](aggregateType: String) =
@@ -53,8 +53,9 @@ object Store:
       fr" where aggregate_id = $aggregateId"
 
 class StoreZ[STATE: Decoder: Encoder, EVENT: Decoder: Encoder, F[_]: Monad: MonadCancelThrow](
-    aggregateType: String,
-)(using transactor: Transactor[F], concurrent: Concurrent[F]) extends EventStore[EVENT, STATE, F]:
+    aggregateType: String
+)(using transactor: Transactor[F], concurrent: Concurrent[F])
+    extends EventStore[EVENT, STATE, F]:
 
   import Store.*
 
