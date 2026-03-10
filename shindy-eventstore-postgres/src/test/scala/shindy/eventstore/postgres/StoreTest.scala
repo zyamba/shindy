@@ -5,10 +5,9 @@ import cats.data.Kleisli
 import cats.effect.IO
 import cats.effect.unsafe.IORuntime
 import doobie.*
-import doobie.implicits.javasql.*
+import doobie.generic.auto.*
 import doobie.postgres.*
 import doobie.postgres.implicits.*
-import doobie.postgres.pgisimplicits.*
 import doobie.scalatest.IOChecker
 import doobie.util.transactor.Transactor.Aux
 import io.circe.generic.auto.*
@@ -20,7 +19,6 @@ import org.scalatest.freespec.AsyncFreeSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import pureconfig.*
-import pureconfig.generic.derivation.default.*
 import shindy.eventstore.postgres.JsonSupport.*
 import shindy.eventstore.postgres.StoreTest.DatabaseConfig
 import shindy.eventstore.{DatabaseTest, EventStoreBehaviors, Hydration}
@@ -58,11 +56,12 @@ trait StoreInitializer:
   val transactorEval: Eval[Aux[IO, Unit]] = Eval.later {
     val dbConf = ConfigSource.default.at("db").loadOrThrow[DatabaseConfig]
 
-    val tx = Transactor.fromDriverManager[IO](
+    val tx = Transactor.fromDriverManager[IO].apply(
       "org.postgresql.Driver",
       dbConf.jdbcUrl,
       dbConf.username,
-      dbConf.password
+      dbConf.password,
+      None
     )
     tx.exec.apply(executeCreateDbScript).unsafeRunAndForget()(IORuntime.global)
     tx
@@ -82,8 +81,10 @@ class StoreTest
 
   override def transactor: Transactor[IO] = transactorEval.value
 
+  given ioTransactor: Transactor[IO] = transactor
+
   val postgresqlEventStore = Store
-    .newStore(transactor)
+    .newStore[IO]
     .forAggregate[UserRecord, UserRecordChangeEvent]("UserAggregate")
 
   "Postgresql event store should" - {

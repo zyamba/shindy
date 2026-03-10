@@ -17,11 +17,11 @@ import java.time.LocalDateTime
 import java.util.UUID
 
 object Store:
-  def newStore[F[_]: MonadCancelThrow](xa: Transactor[F]) = new storePartiallyAppiled(xa)
+  def newStore[F[_]: MonadCancelThrow : Transactor: Concurrent] = new storePartiallyApplied[F]()
 
-  class storePartiallyAppiled[F[_]: Monad: MonadCancelThrow](xa: Transactor[F]):
+  class storePartiallyApplied[F[_]: Monad: MonadCancelThrow]()(using xa: Transactor[F], concurrent: Concurrent[F]):
     def forAggregate[STATE: Decoder: Encoder, EVENT: Decoder: Encoder](aggregateType: String) =
-      new StoreZ[STATE, EVENT, F](aggregateType, xa)
+      new StoreZ[STATE, EVENT, F](aggregateType)
 
   private def selectEvents(aggregateId: UUID): fragment.Fragment =
     sql"select serial_num, aggregate_id, aggregate_type, aggregate_version, event_body, event_time from event" ++
@@ -54,8 +54,7 @@ object Store:
 
 class StoreZ[STATE: Decoder: Encoder, EVENT: Decoder: Encoder, F[_]: Monad: MonadCancelThrow](
     aggregateType: String,
-    transactor: Transactor[F]
-) extends EventStore[EVENT, STATE, F]:
+)(using transactor: Transactor[F], concurrent: Concurrent[F]) extends EventStore[EVENT, STATE, F]:
 
   import Store.*
 

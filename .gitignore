@@ -4,7 +4,6 @@ target
 scalastyle-config.xml
 .bloop
 .bsp
-.idea
 .metals
 .vscode
 project/metals.sbt
