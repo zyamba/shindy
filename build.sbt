@@ -1,17 +1,15 @@
-import Dependencies._
-import sbt.Keys.testOptions
-import sbt.Tests
+import Dependencies.*
+import sbt.Keys.*
+import sbt.*
 
 inThisBuild(
   List(
     organization := "io.github.zyamba",
     organizationName := "zyamba",
     organizationHomepage := Some(url("https://github.com/zyamba")),
-    scalaVersion := "2.13.8",
+    scalaVersion := "3.3.7",
 
-    resolvers ++= Resolver.sonatypeOssRepos("releases"),
-
-    addCompilerPlugin(`kind-projector` cross CrossVersion.binary),
+    resolvers += Resolver.mavenCentral,
 
     scalacOptions ++= Seq("-deprecation", "-feature"),
 
@@ -43,8 +41,7 @@ inThisBuild(
       )
     ),
 
-    pomIncludeRepository := { _ => false },
-    description := "Lightweight Composible Event Sourcing library for Scala",
+    description := "Lightweight Composable Event Sourcing library for Scala",
     licenses := List("MIT" -> new URL("https://opensource.org/licenses/MIT")),
     homepage := Some(url("https://github.com/zyamba/shindy")),
 
@@ -53,12 +50,14 @@ inThisBuild(
 
 // Remove all additional repository other than Maven Central from POM
 ThisBuild / pomIncludeRepository := { _ => false }
-ThisBuild / publishTo := {
-  val nexus = "https://oss.sonatype.org/"
-  if (isSnapshot.value) Some("snapshots" at nexus + "content/repositories/snapshots")
-  else Some("releases" at nexus + "service/local/staging/deploy/maven2")
-}
 ThisBuild / publishMavenStyle := true
+
+// new setting for the Central Portal
+ThisBuild / publishTo := {
+  val centralSnapshots = "https://central.sonatype.com/repository/maven-snapshots/"
+  if (isSnapshot.value) Some("central-snapshots" at centralSnapshots)
+  else localStaging.value
+}
 
 val DbTests = config("db").extend(Test)
 configs(DbTests)

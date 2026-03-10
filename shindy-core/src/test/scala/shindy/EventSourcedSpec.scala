@@ -3,21 +3,20 @@ package shindy
 import java.time.LocalDate
 import java.util.UUID
 
-import cats.syntax.either._
-import cats.syntax.option._
+import cats.syntax.either.*
+import cats.syntax.option.*
 import org.scalatest.freespec.AnyFreeSpec
 import org.scalatest.matchers.should.Matchers
 import shindy.EventSourced.{EventHandler, source, sourceNew}
 
 import scala.language.{postfixOps, reflectiveCalls}
 
-class EventSourcedSpec extends AnyFreeSpec with Matchers {
+class EventSourcedSpec extends AnyFreeSpec with Matchers:
 
-  import EventSourced._
-
+  import EventSourced.*
 
   "Basic functionality" - {
-    import UserRecordService._
+    import UserRecordService.*
 
     "should be able to capture creation event" in {
       val email = "test@yahoo.com"
@@ -98,9 +97,7 @@ class EventSourcedSpec extends AnyFreeSpec with Matchers {
 
       val output = "Success"
       val updatedEmail = "updated@test.com"
-      val condOp = whenStateIs((_: UserRecordActive) => {
-        updateEmail(updatedEmail).map(_ => output)
-      })
+      val condOp = whenStateIs((_: UserRecordActive) => updateEmail(updatedEmail).map(_ => output))
 
       val runTrue = condOp.run(activeUser)
       runTrue should be(Symbol("right"))
@@ -116,10 +113,7 @@ class EventSourcedSpec extends AnyFreeSpec with Matchers {
       val inactiveUser = UserRecordInactive(UserRecordActive(UUID.randomUUID(), "test@test.com"))
 
       val updatedEmail = "updated@test.com"
-      val condOp = whenStateIs(
-        (_: UserRecordActive) => {
-          updateEmail(updatedEmail).map(_ => "should not happen")
-        })
+      val condOp = whenStateIs((_: UserRecordActive) => updateEmail(updatedEmail).map(_ => "should not happen"))
 
       val runFalse = condOp.run(inactiveUser)
       runFalse should be(Symbol("right"))
@@ -138,18 +132,20 @@ class EventSourcedSpec extends AnyFreeSpec with Matchers {
       val birthdate = LocalDate.of(2000, 1, 1)
 
       val createAndModifyUser =
-        createUser(userId, regEmail) andThen {
-          _ => updateEmail(updEmail)
-        } andThen {
-          _ => changeBirthdate(birthdate)
+        createUser(userId, regEmail) andThen { _ =>
+          updateEmail(updEmail)
+        } andThen { _ =>
+          changeBirthdate(birthdate)
         }
 
       val results = createAndModifyUser.run
       results should be(Symbol("right"))
       val Right((events, finalState, _)) = results
 
-      events should contain inOrder(
-        UserCreated(userId, regEmail), EmailUpdated(updEmail), BirthdateUpdated(birthdate)
+      events should contain inOrder (
+        UserCreated(userId, regEmail),
+        EmailUpdated(updEmail),
+        BirthdateUpdated(birthdate)
       )
       finalState shouldEqual UserRecordActive(userId, updEmail, birthdate.some)
     }
@@ -161,18 +157,20 @@ class EventSourcedSpec extends AnyFreeSpec with Matchers {
       val birthdate = LocalDate.of(2000, 1, 1)
 
       val modifyUser =
-        for {
+        for
           s1 <- updateEmail(updEmail).map(_ => "Hello, ").widen[UserRecordChangeEvent]
           s2 <- changeBirthdate(birthdate).map(_ => "world")
-        } yield s1 + s2
+        yield s1 + s2
 
       val results = (createUser(userId, regEmail) andThen modifyUser) run
 
       results should be(Symbol("right"))
       val Right((events, finalState, msg)) = results
 
-      events should contain inOrder(
-        UserCreated(userId, regEmail), EmailUpdated(updEmail), BirthdateUpdated(birthdate)
+      events should contain inOrder (
+        UserCreated(userId, regEmail),
+        EmailUpdated(updEmail),
+        BirthdateUpdated(birthdate)
       )
       finalState shouldEqual UserRecordActive(userId, updEmail, birthdate.some)
       msg shouldEqual "Hello, world"
@@ -190,7 +188,7 @@ class EventSourcedSpec extends AnyFreeSpec with Matchers {
     "should fail if error is sourced" in {
       val errMessage = "Error sourced"
       val errSourced: SourcedUpdate[UserRecord, UserRecordChangeEvent, Option[Unit]] = whenStateIs {
-        _: UserRecordActive => sourceError(errMessage)
+        (_: UserRecordActive) => sourceError(errMessage)
       }
 
       val userRecordState = UserRecordActive(UUID.randomUUID(), "test@test.com")
@@ -203,7 +201,7 @@ class EventSourcedSpec extends AnyFreeSpec with Matchers {
       val inspectEmail: SourcedUpdate[UserRecord, UserRecordChangeEvent, Option[String]] =
         SourcedUpdate.pure(()).inspect {
           case e: UserRecordActive => Some(e.email)
-          case _ => None
+          case _                   => None
         }
 
       val userRecordState = UserRecordActive(UUID.randomUUID(), "test@test.com")
@@ -214,9 +212,9 @@ class EventSourcedSpec extends AnyFreeSpec with Matchers {
 
     "should be able to collect events from SourcedCreate and SourcedUpdate" in {
       val sourcedCreate = createUser(UUID.randomUUID(), "test1@test.com")
-      val sourcedUpdate = updateEmail("test2@test.com").
-        andThen(updateEmail("test3@test.com")).
-        andThen(changeBirthdate(LocalDate.of(2000, 1, 2)))
+      val sourcedUpdate = updateEmail("test2@test.com")
+        .andThen(updateEmail("test3@test.com"))
+        .andThen(changeBirthdate(LocalDate.of(2000, 1, 2)))
       val program = sourcedCreate andThen sourcedUpdate
 
       val eventsEither = program.events
@@ -227,7 +225,7 @@ class EventSourcedSpec extends AnyFreeSpec with Matchers {
       val updateEventsEither = sourcedUpdate.events(
         UserRecordActive(UUID.randomUUID(), "one@test.com")
       )
-      updateEventsEither should be (Symbol("right"))
+      updateEventsEither should be(Symbol("right"))
       val Right(updateEvents) = updateEventsEither
       updateEvents should have size 3
 
@@ -236,17 +234,15 @@ class EventSourcedSpec extends AnyFreeSpec with Matchers {
 
   "EventHandler" - {
     "should throw RuntimeException if there is no handler for the event" in {
-      import UserRecordService._
+      import UserRecordService.*
 
       val userRecordState = UserRecordActive(UUID.randomUUID(), "test@test.com")
       val exception = the[RuntimeException] thrownBy suspend().run(userRecordState)
-
 
       exception.getMessage should (
         include("Unhandled event")
           and include("Suspended")
           and include(userRecordState.getClass.getSimpleName)
-        )
+      )
     }
   }
-}

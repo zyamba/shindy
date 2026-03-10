@@ -13,7 +13,7 @@ import java.util.UUID
   * @tparam EVENT
   *   Type of events.
   */
-trait Hydration[STATE, EVENT] {
+trait Hydration[STATE, EVENT]:
 
   /** Indicates the least number of events that need to be produced in order to store a snapshot. By default state
     * snapshots are disabled.
@@ -28,4 +28,3 @@ trait Hydration[STATE, EVENT] {
       eventHandler: EventHandler[STATE, EVENT],
       compiler: fs2.Compiler[F, F]
   ): Hydrated[STATE, EVENT, Unit, F] = HydratedImpl.hydrate(aggregateId, stateSnapshotInterval)
-}

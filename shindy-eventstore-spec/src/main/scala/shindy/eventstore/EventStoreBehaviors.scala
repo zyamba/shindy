@@ -1,12 +1,13 @@
 package shindy.eventstore
 
-import cats.effect._
+import cats.effect.*
 import cats.effect.testing.scalatest.AsyncIOSpec
-import org.scalatest.Tag
-import org.scalatest.freespec.AsyncFreeSpec
+import org.scalatest.{AsyncTestSuite, Tag}
+import org.scalatest.freespec.{AnyFreeSpec, AsyncFreeSpec}
+import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
-import shindy.examples.UserService._
+import shindy.examples.UserService.*
 import shindy.{EventSourced, SourcedCreation, SourcedUpdate}
 
 import java.time.LocalDate
@@ -17,11 +18,12 @@ import scala.language.reflectiveCalls
 object DatabaseTest extends Tag("DatabaseTest")
 
 trait EventStoreBehaviors
-    extends Matchers
+    extends AsyncFreeSpec
+    with AsyncTestSuite
+    with Matchers
     with AsyncIOSpec
     with ScalaCheckPropertyChecks
-    with Hydration[UserRecord, UserRecordChangeEvent] {
-  this: AsyncFreeSpec =>
+    with Hydration[UserRecord, UserRecordChangeEvent]:
 
   private val snapshotIntervalValue: Int = 100
 
@@ -29,13 +31,12 @@ trait EventStoreBehaviors
     */
   protected def typicalEventStore(
       recordEventStore: EventStore[UserRecordChangeEvent, UserRecord, IO]
-  ) = {
+  ) =
 
-    def loadEvents(id: UUID) = {
+    def loadEvents(id: UUID) =
       recordEventStore.loadEvents(id).compile.toList
-    }
 
-    "hydrate" taggedAs DatabaseTest in {
+    "hydrate" taggedAs (DatabaseTest) in {
       val userId = UUID.randomUUID()
       val birthdate = LocalDate.of(2000, 1, 1)
       val updatedEmail = "updated@email.com"
@@ -47,12 +48,14 @@ trait EventStoreBehaviors
         BirthdateUpdated(birthdate)
       )
       val versionedEvents =
-        events.zip(events.indices.map(_ + 1)).map(tupled(VersionedEvent.apply))
+        events.zip(events.indices.map(_ + 1)).map { case (event, n) =>
+          VersionedEvent(event, n)
+        }
 
-      val stateResults = for {
+      val stateResults = for
         _ <- recordEventStore.storeEvents(userId, versionedEvents)
         results <- hydrate[IO](userId).state().run(recordEventStore)
-      } yield results
+      yield results
 
       // hydrate record
       stateResults.asserting { state =>
@@ -65,7 +68,7 @@ trait EventStoreBehaviors
 
     "store and load events with incremental version value" taggedAs DatabaseTest in {
       val userId = UUID.randomUUID()
-      val program = for {
+      val program = for
         createResult <- createNew[IO](createUser(userId, "test@gmail.com"))
           .persist()
           .run(recordEventStore)
@@ -78,7 +81,7 @@ trait EventStoreBehaviors
           .persist()
           .run(recordEventStore)
         events <- loadEvents(userId)
-      } yield (createResult._1, events)
+      yield (createResult._1, events)
 
       program.asserting { case (id, events) =>
         id should equal(userId)
@@ -94,10 +97,10 @@ trait EventStoreBehaviors
         createUser(userId, "test@test.com")
       ) update updateEmail("updated@email.com")
 
-      val programResults = for {
+      val programResults = for
         r <- hydratedAggregate.persist().run(recordEventStore)
         results <- loadEvents(r._1)
-      } yield (r._1, r._2, results)
+      yield (r._1, r._2, results)
 
       programResults.asserting { case (id, state, results) =>
         id shouldBe userId
@@ -165,11 +168,11 @@ trait EventStoreBehaviors
         val scUp = sc.update(updateEmail(s"updated_$n@test.com").map(_ => ()))
         scUp
       }
-      val program = for {
+      val program = for
         p <- allOps.persist().run(recordEventStore)
         snapshot <- recordEventStore.loadLatestStateSnapshot(p._1)
         events <- loadEvents(p._1)
-      } yield (snapshot, events)
+      yield (snapshot, events)
 
       program.asserting { case (snapshot, events) =>
         snapshot shouldNot be(Symbol("defined"))
@@ -186,7 +189,7 @@ trait EventStoreBehaviors
         }
 
       val finalEmail = "final@test.com"
-      val program = for {
+      val program = for
         // this would persist event and creates a snapshot
         createdAndPersisted <- createNew[IO](initial)
           .update(allOps)
@@ -201,7 +204,7 @@ trait EventStoreBehaviors
           .run(recordEventStore)
         hydratedAndUpdatedState = hydratedAndUpdated._2
         hydratedState <- hydrate[IO](id).state().run(recordEventStore)
-      } yield (snapshotOpt, hydratedAndUpdatedState, hydratedState)
+      yield (snapshotOpt, hydratedAndUpdatedState, hydratedState)
 
       program.asserting { case (snapshot, hydratedAndUpdatedState, hydratedState) =>
         snapshot should be(Symbol("defined"))
@@ -210,8 +213,6 @@ trait EventStoreBehaviors
         hydratedState shouldEqual hydratedAndUpdatedState
       }
     }
-  }
 
   override protected final def stateSnapshotInterval: Option[Int] =
     Some(snapshotIntervalValue)
-}

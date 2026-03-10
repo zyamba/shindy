@@ -3,13 +3,13 @@ package shindy.eventstore
 import cats.Monad
 import cats.data.ReaderT
 import cats.effect.{MonadCancel, MonadCancelThrow}
-import cats.syntax.all._
+import cats.syntax.all.*
 import shindy.EventSourced.EventHandler
 import shindy.{EventSourced, SourcedCreation, SourcedUpdate}
 
 import java.util.UUID
 
-private[shindy] object HydratedImpl {
+private[shindy] object HydratedImpl:
 
   def createNew[STATE, EVENT, F[_]: MonadCancelThrow](
       sc: SourcedCreation[STATE, EVENT, UUID],
@@ -30,7 +30,7 @@ private[shindy] object HydratedImpl {
       eventHandler: EventHandler[STATE, EVENT],
       evCompiler: fs2.Compiler[F, F]
   ): Hydrated[STATE, EVENT, Unit, F] = new HydratedImpl(
-    ReaderT { es: EventStore[EVENT, STATE, F] =>
+    ReaderT { (es: EventStore[EVENT, STATE, F]) =>
       es.loadLatestStateSnapshot(aggregateId)
         .map { sOut =>
           (sOut, es.loadEvents(aggregateId, sOut.map(_._2)))
@@ -58,7 +58,6 @@ private[shindy] object HydratedImpl {
     SourcedUpdate.pure(()),
     snapshotInterval
   )
-}
 
 /** @param scLoad
   *   Loads SourcedCreation which returns tuple of aggregateID, snapshot version and latest event version
@@ -78,7 +77,7 @@ private class HydratedImpl[STATE, EVENT, A, F[_]: MonadCancelThrow](
     scLoad: ReaderT[F, EventStore[EVENT, STATE, F], SourcedCreation[STATE, EVENT, (UUID, Int, Int)]],
     sourcedUpdate: SourcedUpdate[STATE, EVENT, A],
     snapshotInterval: Option[Int]
-) extends Hydrated[STATE, EVENT, A, F] {
+) extends Hydrated[STATE, EVENT, A, F]:
   override def map[B](f: A => B): Hydrated[STATE, EVENT, B, F] =
     new HydratedImpl[STATE, EVENT, B, F](scLoad, sourcedUpdate.map(f), snapshotInterval)
 
@@ -92,7 +91,7 @@ private class HydratedImpl[STATE, EVENT, A, F[_]: MonadCancelThrow](
 
   private val noopF: F[Unit] = Monad[F].pure(())
 
-  override def persist(): ReaderT[F, EventStore[EVENT, STATE, F], (UUID, STATE, A)] = {
+  override def persist(): ReaderT[F, EventStore[EVENT, STATE, F], (UUID, STATE, A)] =
     val runProgram = scLoad.map { sourcedLoad =>
       sourcedLoad
         .andThen { idAndVer =>
@@ -101,16 +100,16 @@ private class HydratedImpl[STATE, EVENT, A, F[_]: MonadCancelThrow](
         .run
         .leftMap(new Exception(_))
         .map { case (newEvents, newState, (aggId, snapshotVersion, initialVersion, aOut)) =>
-          val versionedEvents = newEvents
+          val versionedEvents: Vector[VersionedEvent[EVENT]] = newEvents
             .zip(LazyList.from(initialVersion + 1))
-            .map(Function tupled VersionedEvent.apply)
+            .map { case (ev, v) => VersionedEvent.apply(ev, v) }
           (aggId, versionedEvents, newState, snapshotVersion, aOut)
         }
     }
     runProgram.flatMap { programResults =>
-      ReaderT { es: EventStore[EVENT, STATE, F] =>
+      ReaderT { (es: EventStore[EVENT, STATE, F]) =>
         programResults.traverse { case (aggId, events, newState, snapshotVersion, aOut) =>
-          for {
+          for
             _ <- es.storeEvents(aggId, events)
             _ <- events.lastOption
               .map(_.version)
@@ -118,11 +117,10 @@ private class HydratedImpl[STATE, EVENT, A, F[_]: MonadCancelThrow](
                 maybeDoSnapshot(snapshotVersion, lastEventVersion, aggId, newState, es)
               }
               .getOrElse(noopF)
-          } yield (aggId, newState, aOut)
+          yield (aggId, newState, aOut)
         }
       }.flatMapF(MonadCancel[F].pure(_).rethrow)
     }
-  }
 
   private def maybeDoSnapshot(
       lastSnapshotVer: Int,
@@ -133,11 +131,8 @@ private class HydratedImpl[STATE, EVENT, A, F[_]: MonadCancelThrow](
   ): F[Unit] =
     snapshotInterval
       .map { interval =>
-        if ((lastVersion - lastSnapshotVer) >= interval) {
+        if (lastVersion - lastSnapshotVer) >= interval then
           store.storeSnapshot(aggregateId, state, lastVersion).map(_ => ())
-        } else {
-          noopF
-        }
+        else noopF
       }
       .getOrElse(noopF)
-}

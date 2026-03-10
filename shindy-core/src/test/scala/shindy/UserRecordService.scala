@@ -3,10 +3,10 @@ package shindy
 import java.time.LocalDate
 import java.util.UUID
 
-import cats.implicits._
+import cats.implicits.*
 import shindy.EventSourced.{EventHandler, source, sourceNew}
 
-object UserRecordService {
+object UserRecordService:
 
   // state
   sealed trait UserRecord
@@ -39,12 +39,12 @@ object UserRecordService {
   def createUser(id: UUID, email: String): SourcedCreation[UserRecord, UserCreated, UUID] =
     sourceNew[UserRecord](UserCreated(id, email).asRight).map(_ => id)
 
-  def updateEmail(email: String): SourcedUpdate[UserRecord, EmailUpdated, Unit] = source {
-    _: UserRecord => Either.cond(email.contains("@"), EmailUpdated(email), "email is invalid")
+  def updateEmail(email: String): SourcedUpdate[UserRecord, EmailUpdated, Unit] = source { (_: UserRecord) =>
+    Either.cond(email.contains("@"), EmailUpdated(email), "email is invalid")
   }
 
   def changeBirthdate(datetime: LocalDate): SourcedUpdate[UserRecord, BirthdateUpdated, Unit] = source {
-    _: UserRecord =>
+    (_: UserRecord) =>
       Either.cond(
         datetime.isBefore(LocalDate.of(2018, 1, 1)),
         BirthdateUpdated(datetime),
@@ -53,4 +53,3 @@ object UserRecordService {
   }
 
   def suspend(): SourcedUpdate[UserRecord, Suspended, Unit] = source(_ => Suspended().asRight)
-}
