@@ -43,6 +43,7 @@ jobs:
         run: |
           sbt clean coverage test db:test coverageReport coverageAggregate
       - name: "Upload coverage to Codecov"
-        uses: "codecov/codecov-action@v2"
+        uses: "codecov/codecov-action@v5"
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
