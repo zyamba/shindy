@@ -39,12 +39,12 @@ object UserRecordService {
   def createUser(id: UUID, email: String): SourcedCreation[UserRecord, UserCreated, UUID] =
     sourceNew[UserRecord](UserCreated(id, email).asRight).map(_ => id)
 
-  def updateEmail(email: String): SourcedUpdate[UserRecord, EmailUpdated, Unit] = source {
-    _: UserRecord => Either.cond(email.contains("@"), EmailUpdated(email), "email is invalid")
+  def updateEmail(email: String): SourcedUpdate[UserRecord, EmailUpdated, Unit] = source { (_: UserRecord) =>
+    Either.cond(email.contains("@"), EmailUpdated(email), "email is invalid")
   }
 
   def changeBirthdate(datetime: LocalDate): SourcedUpdate[UserRecord, BirthdateUpdated, Unit] = source {
-    _: UserRecord =>
+    (_: UserRecord) =>
       Either.cond(
         datetime.isBefore(LocalDate.of(2018, 1, 1)),
         BirthdateUpdated(datetime),

@@ -30,7 +30,7 @@ private[shindy] object HydratedImpl {
       eventHandler: EventHandler[STATE, EVENT],
       evCompiler: fs2.Compiler[F, F]
   ): Hydrated[STATE, EVENT, Unit, F] = new HydratedImpl(
-    ReaderT { es: EventStore[EVENT, STATE, F] =>
+    ReaderT { (es: EventStore[EVENT, STATE, F]) =>
       es.loadLatestStateSnapshot(aggregateId)
         .map { sOut =>
           (sOut, es.loadEvents(aggregateId, sOut.map(_._2)))
@@ -101,14 +101,14 @@ private class HydratedImpl[STATE, EVENT, A, F[_]: MonadCancelThrow](
         .run
         .leftMap(new Exception(_))
         .map { case (newEvents, newState, (aggId, snapshotVersion, initialVersion, aOut)) =>
-          val versionedEvents = newEvents
+          val versionedEvents: Vector[VersionedEvent[EVENT]] = newEvents
             .zip(LazyList.from(initialVersion + 1))
-            .map(Function tupled VersionedEvent.apply)
+            .map { case (ev, v) => VersionedEvent.apply(ev, v) }
           (aggId, versionedEvents, newState, snapshotVersion, aOut)
         }
     }
     runProgram.flatMap { programResults =>
-      ReaderT { es: EventStore[EVENT, STATE, F] =>
+      ReaderT { (es: EventStore[EVENT, STATE, F]) =>
         programResults.traverse { case (aggId, events, newState, snapshotVersion, aOut) =>
           for {
             _ <- es.storeEvents(aggId, events)

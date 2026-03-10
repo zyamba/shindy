@@ -4,27 +4,27 @@ import cats.Eval
 import cats.data.Kleisli
 import cats.effect.IO
 import cats.effect.unsafe.IORuntime
-import doobie._
-import doobie.implicits.javasql._
-import doobie.postgres._
-import doobie.postgres.implicits._
-import doobie.postgres.pgisimplicits._
+import doobie.*
+import doobie.implicits.javasql.*
+import doobie.postgres.*
+import doobie.postgres.implicits.*
+import doobie.postgres.pgisimplicits.*
 import doobie.scalatest.IOChecker
 import doobie.util.transactor.Transactor.Aux
-import io.circe.generic.auto._
-import io.circe.syntax._
+import io.circe.generic.auto.*
+import io.circe.syntax.*
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.{Arbitrary, Gen}
-import org.scalatest._
+import org.scalatest.*
 import org.scalatest.freespec.AsyncFreeSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
-import pureconfig.generic.semiauto.deriveReader
-import pureconfig.{ConfigReader, ConfigSource}
-import shindy.eventstore.postgres.JsonSupport._
+import pureconfig.*
+import pureconfig.generic.derivation.default.*
+import shindy.eventstore.postgres.JsonSupport.*
 import shindy.eventstore.postgres.StoreTest.DatabaseConfig
 import shindy.eventstore.{DatabaseTest, EventStoreBehaviors, Hydration}
-import shindy.examples.UserService._
+import shindy.examples.UserService.*
 
 import java.sql.Connection
 import java.time.{LocalDateTime, ZoneId}
@@ -40,14 +40,14 @@ object StoreTest {
 
   implicit val arbUserRecGen: Arbitrary[UserRecord] = Arbitrary(userRecGen)
 
-  case class DatabaseConfig(hostname: String, database: String, username: String,
-    password: String, port: Int) {
+  case class DatabaseConfig(hostname: String, database: String, username: String, password: String, port: Int)
+      derives pureconfig.ConfigReader {
     lazy val jdbcUrl = s"jdbc:postgresql://$hostname:$port/$database"
   }
 }
 
 trait StoreInitializer {
-  private val executeCreateDbScript = Kleisli[IO, Connection, Unit] { connection: Connection =>
+  private val executeCreateDbScript = Kleisli[IO, Connection, Unit] { (connection: Connection) =>
     IO {
       val is = getClass.getResourceAsStream("/create_database.sql")
       try {
@@ -60,7 +60,6 @@ trait StoreInitializer {
   }
 
   val transactorEval: Eval[Aux[IO, Unit]] = Eval.later {
-    implicit val configReader: ConfigReader[DatabaseConfig] = deriveReader[DatabaseConfig]
     val dbConf = ConfigSource.default.at("db").loadOrThrow[DatabaseConfig]
 
     val tx = Transactor.fromDriverManager[IO](
@@ -74,22 +73,23 @@ trait StoreInitializer {
   }
 }
 
-class StoreTest extends AsyncFreeSpec
-  with ScalaCheckPropertyChecks
-  with IOChecker
-  with EitherValues
-  with Matchers
-  with Hydration[UserRecord, UserRecordChangeEvent]
-  with StoreInitializer
-  with EventStoreBehaviors {
+class StoreTest
+    extends AsyncFreeSpec
+    with ScalaCheckPropertyChecks
+    with IOChecker
+    with EitherValues
+    with Matchers
+    with Hydration[UserRecord, UserRecordChangeEvent]
+    with StoreInitializer
+    with EventStoreBehaviors {
 
-  import StoreTest._
+  import StoreTest.*
 
   override def transactor: Transactor[IO] = transactorEval.value
 
-  val postgresqlEventStore = Store.newStore(transactor)
+  val postgresqlEventStore = Store
+    .newStore(transactor)
     .forAggregate[UserRecord, UserRecordChangeEvent]("UserAggregate")
-
 
   "Postgresql event store should" - {
     behave like typicalEventStore(postgresqlEventStore)

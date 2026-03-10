@@ -4,28 +4,26 @@ import scala.language.{higherKinds, implicitConversions, reflectiveCalls}
 
 object SourcedCreation {
   def apply[STATE, EVENT, A](
-    create: => Either[String, STATE],
-    upd: SourcedUpdate[STATE, EVENT, A]
+      create: => Either[String, STATE],
+      upd: SourcedUpdate[STATE, EVENT, A]
   ): SourcedCreation[STATE, EVENT, A] = new SourcedCreation(create, upd)
 }
 
-
 class SourcedCreation[STATE, +EVENT, A](
-  create: => Either[String, STATE],
-  upd: SourcedUpdate[STATE, EVENT, A]
+    create: => Either[String, STATE],
+    upd: SourcedUpdate[STATE, EVENT, A]
 ) {
 
-  /**
-   * Widen [[EVENT]] type to [[E]]
-   *
-   * @tparam E wider [[EVENT]] type
-   * @return
-   */
+  /** Widen [[EVENT]] type to [[E]]
+    *
+    * @tparam E
+    *   wider [[EVENT]] type
+    * @return
+    */
   def widen[E >: EVENT]: SourcedCreation[STATE, E, A] = this
 
-  /**
-   * Return current state
-   */
+  /** Return current state
+    */
   def get: SourcedCreation[STATE, EVENT, STATE] = SourcedCreation(create, upd.get)
 
   def events: Either[String, Vector[EVENT]] = create.flatMap(upd.events)

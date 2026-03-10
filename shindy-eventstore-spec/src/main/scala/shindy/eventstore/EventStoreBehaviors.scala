@@ -1,12 +1,13 @@
 package shindy.eventstore
 
-import cats.effect._
+import cats.effect.*
 import cats.effect.testing.scalatest.AsyncIOSpec
-import org.scalatest.Tag
-import org.scalatest.freespec.AsyncFreeSpec
+import org.scalatest.{AsyncTestSuite, Tag}
+import org.scalatest.freespec.{AnyFreeSpec, AsyncFreeSpec}
+import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
-import shindy.examples.UserService._
+import shindy.examples.UserService.*
 import shindy.{EventSourced, SourcedCreation, SourcedUpdate}
 
 import java.time.LocalDate
@@ -17,11 +18,12 @@ import scala.language.reflectiveCalls
 object DatabaseTest extends Tag("DatabaseTest")
 
 trait EventStoreBehaviors
-    extends Matchers
+    extends AsyncFreeSpec
+    with AsyncTestSuite
+    with Matchers
     with AsyncIOSpec
     with ScalaCheckPropertyChecks
     with Hydration[UserRecord, UserRecordChangeEvent] {
-  this: AsyncFreeSpec =>
 
   private val snapshotIntervalValue: Int = 100
 
@@ -35,7 +37,7 @@ trait EventStoreBehaviors
       recordEventStore.loadEvents(id).compile.toList
     }
 
-    "hydrate" taggedAs DatabaseTest in {
+    "hydrate" taggedAs (DatabaseTest) in {
       val userId = UUID.randomUUID()
       val birthdate = LocalDate.of(2000, 1, 1)
       val updatedEmail = "updated@email.com"
@@ -47,7 +49,9 @@ trait EventStoreBehaviors
         BirthdateUpdated(birthdate)
       )
       val versionedEvents =
-        events.zip(events.indices.map(_ + 1)).map(tupled(VersionedEvent.apply))
+        events.zip(events.indices.map(_ + 1)).map { case (event, n) =>
+          VersionedEvent(event, n)
+        }
 
       val stateResults = for {
         _ <- recordEventStore.storeEvents(userId, versionedEvents)

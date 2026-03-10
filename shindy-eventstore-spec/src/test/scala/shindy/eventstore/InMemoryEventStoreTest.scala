@@ -8,8 +8,7 @@ import scala.language.reflectiveCalls
 
 class InMemoryEventStoreshiTest extends AsyncFreeSpec with EventStoreBehaviors {
 
-  val recordEventStore
-      : EventStore[UserRecordChangeEvent, UserRecord, IO] =
+  val recordEventStore: EventStore[UserRecordChangeEvent, UserRecord, IO] =
     new InMemoryEventStore[UserRecordChangeEvent, UserRecord]()
 
   "Using in-memory event store implementation it should" - {

@@ -17,10 +17,10 @@ import java.time.LocalDateTime
 import java.util.UUID
 
 object Store {
-  def newStore[F[_] : MonadCancelThrow](xa: Transactor[F]) = new storePartiallyAppiled(xa)
+  def newStore[F[_]: MonadCancelThrow](xa: Transactor[F]) = new storePartiallyAppiled(xa)
 
-  class storePartiallyAppiled[F[_] : Monad : MonadCancelThrow](xa: Transactor[F]) {
-    def forAggregate[STATE: Decoder : Encoder, EVENT: Decoder : Encoder](aggregateType: String) =
+  class storePartiallyAppiled[F[_]: Monad: MonadCancelThrow](xa: Transactor[F]) {
+    def forAggregate[STATE: Decoder: Encoder, EVENT: Decoder: Encoder](aggregateType: String) =
       new StoreZ[STATE, EVENT, F](aggregateType, xa)
   }
 
@@ -28,7 +28,9 @@ object Store {
     sql"select serial_num, aggregate_id, aggregate_type, aggregate_version, event_body, event_time from event" ++
       fr" where aggregate_id = $aggregateId"
   private[postgres] val insertEvent: update.Update[(String, UUID, Int, Json)] =
-    Update.apply[(String, UUID, Int, Json)]("insert into event (aggregate_type, aggregate_id, aggregate_version, event_body) values (?,?,?,?)")
+    Update.apply[(String, UUID, Int, Json)](
+      "insert into event (aggregate_type, aggregate_id, aggregate_version, event_body) values (?,?,?,?)"
+    )
 
   private[postgres] def insertState(aggregateId: UUID, version: Int, stateSnapshot: Json): doobie.Update0 =
     sql"""
@@ -42,7 +44,8 @@ object Store {
     fr"and aggregate_version >= $versionInclusive"
 
   private[postgres] def selectEvents(aggregateId: UUID, fromVersion: Option[Int]): fragment.Fragment = {
-    val versionFilter = fromVersion.map(andVersionGreaterEqualThen)
+    val versionFilter = fromVersion
+      .map(andVersionGreaterEqualThen)
       .getOrElse(fragment.Fragment.empty)
     selectEvents(aggregateId) ++ versionFilter ++ fr" order by aggregate_version"
   }
@@ -53,8 +56,9 @@ object Store {
   }
 }
 
-class StoreZ[STATE: Decoder : Encoder, EVENT: Decoder : Encoder, F[_] : Monad : MonadCancelThrow](
-  aggregateType: String, transactor: Transactor[F]
+class StoreZ[STATE: Decoder: Encoder, EVENT: Decoder: Encoder, F[_]: Monad: MonadCancelThrow](
+    aggregateType: String,
+    transactor: Transactor[F]
 ) extends EventStore[EVENT, STATE, F] {
 
   import Store._
@@ -65,21 +69,28 @@ class StoreZ[STATE: Decoder : Encoder, EVENT: Decoder : Encoder, F[_] : Monad : 
   implicitly[Read[StoreEvent]]
 
   override def loadEvents(aggregateId: UUID, fromVersion: Option[Int]): fs2.Stream[F, VersionedEvent[EVENT]] =
-    selectEvents(aggregateId, fromVersion).query[StoreEvent]
-      .stream.transact(transactor)
+    selectEvents(aggregateId, fromVersion)
+      .query[StoreEvent]
+      .stream
+      .transact(transactor)
       .map(se => VersionedEvent(decodeFromJson[EVENT](se.eventBody), se.aggregateVersion))
 
   override def storeEvents(aggregateId: UUID, events: Vector[VersionedEvent[EVENT]]): F[Unit] = {
     val convertedEvents = events.map(ev => (aggregateType, aggregateId, ev.version, Encoder[EVENT].apply(ev.event)))
-    insertEvent.updateMany(convertedEvents)
+    insertEvent
+      .updateMany(convertedEvents)
       .transact(transactor)
       .map(_ => ())
   }
 
   override def loadLatestStateSnapshot(aggregateId: UUID): F[Option[(STATE, Int)]] =
-    findStateSnapshot(aggregateId).query[StateSnapshot].map { lastSnapshot =>
-      decodeFromJson[STATE](lastSnapshot.stateSnapshot) -> lastSnapshot.version
-    }.option.transact(transactor)
+    findStateSnapshot(aggregateId)
+      .query[StateSnapshot]
+      .map { lastSnapshot =>
+        decodeFromJson[STATE](lastSnapshot.stateSnapshot) -> lastSnapshot.version
+      }
+      .option
+      .transact(transactor)
 
   override def storeSnapshot(aggregateId: UUID, state: STATE, version: Int): F[Int] =
     insertState(aggregateId, version, state.asJson).run.transact(transactor)

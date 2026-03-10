@@ -17,11 +17,10 @@ private[postgres] object JsonSupport {
     }
 
   implicit val jsonPut: Put[Json] =
-    Put.Advanced.other[PGobject](NonEmptyList.of("jsonb")).tcontramap[Json] {
-      j =>
-        val o = new PGobject
-        o.setType("jsonb")
-        o.setValue(j.noSpaces)
-        o
+    Put.Advanced.other[PGobject](NonEmptyList.of("jsonb")).tcontramap[Json] { j =>
+      val o = new PGobject
+      o.setType("jsonb")
+      o.setValue(j.noSpaces)
+      o
     }
 }
