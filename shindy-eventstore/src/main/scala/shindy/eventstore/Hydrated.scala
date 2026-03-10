@@ -14,7 +14,7 @@ import java.util.UUID
   * @tparam A
   *   Output value type
   */
-trait Hydrated[STATE, EVENT, A, F[_]] {
+trait Hydrated[STATE, EVENT, A, F[_]]:
 
   def map[B](f: A => B): Hydrated[STATE, EVENT, B, F]
 
@@ -29,4 +29,3 @@ trait Hydrated[STATE, EVENT, A, F[_]] {
     * Not very useful except for using in tests or for debugging.
     */
   def state(): ReaderT[F, EventStore[EVENT, STATE, F], STATE]
-}

@@ -3,20 +3,20 @@ package shindy
 import java.time.LocalDate
 import java.util.UUID
 
-import cats.syntax.either._
-import cats.syntax.option._
+import cats.syntax.either.*
+import cats.syntax.option.*
 import org.scalatest.freespec.AnyFreeSpec
 import org.scalatest.matchers.should.Matchers
 import shindy.EventSourced.{EventHandler, source, sourceNew}
 
 import scala.language.{postfixOps, reflectiveCalls}
 
-class EventSourcedSpec extends AnyFreeSpec with Matchers {
+class EventSourcedSpec extends AnyFreeSpec with Matchers:
 
-  import EventSourced._
+  import EventSourced.*
 
   "Basic functionality" - {
-    import UserRecordService._
+    import UserRecordService.*
 
     "should be able to capture creation event" in {
       val email = "test@yahoo.com"
@@ -97,9 +97,7 @@ class EventSourcedSpec extends AnyFreeSpec with Matchers {
 
       val output = "Success"
       val updatedEmail = "updated@test.com"
-      val condOp = whenStateIs((_: UserRecordActive) => {
-        updateEmail(updatedEmail).map(_ => output)
-      })
+      val condOp = whenStateIs((_: UserRecordActive) => updateEmail(updatedEmail).map(_ => output))
 
       val runTrue = condOp.run(activeUser)
       runTrue should be(Symbol("right"))
@@ -115,9 +113,7 @@ class EventSourcedSpec extends AnyFreeSpec with Matchers {
       val inactiveUser = UserRecordInactive(UserRecordActive(UUID.randomUUID(), "test@test.com"))
 
       val updatedEmail = "updated@test.com"
-      val condOp = whenStateIs((_: UserRecordActive) => {
-        updateEmail(updatedEmail).map(_ => "should not happen")
-      })
+      val condOp = whenStateIs((_: UserRecordActive) => updateEmail(updatedEmail).map(_ => "should not happen"))
 
       val runFalse = condOp.run(inactiveUser)
       runFalse should be(Symbol("right"))
@@ -161,10 +157,10 @@ class EventSourcedSpec extends AnyFreeSpec with Matchers {
       val birthdate = LocalDate.of(2000, 1, 1)
 
       val modifyUser =
-        for {
+        for
           s1 <- updateEmail(updEmail).map(_ => "Hello, ").widen[UserRecordChangeEvent]
           s2 <- changeBirthdate(birthdate).map(_ => "world")
-        } yield s1 + s2
+        yield s1 + s2
 
       val results = (createUser(userId, regEmail) andThen modifyUser) run
 
@@ -238,7 +234,7 @@ class EventSourcedSpec extends AnyFreeSpec with Matchers {
 
   "EventHandler" - {
     "should throw RuntimeException if there is no handler for the event" in {
-      import UserRecordService._
+      import UserRecordService.*
 
       val userRecordState = UserRecordActive(UUID.randomUUID(), "test@test.com")
       val exception = the[RuntimeException] thrownBy suspend().run(userRecordState)
@@ -250,4 +246,3 @@ class EventSourcedSpec extends AnyFreeSpec with Matchers {
       )
     }
   }
-}

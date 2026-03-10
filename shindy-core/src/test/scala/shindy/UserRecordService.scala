@@ -3,10 +3,10 @@ package shindy
 import java.time.LocalDate
 import java.util.UUID
 
-import cats.implicits._
+import cats.implicits.*
 import shindy.EventSourced.{EventHandler, source, sourceNew}
 
-object UserRecordService {
+object UserRecordService:
 
   // state
   sealed trait UserRecord
@@ -53,4 +53,3 @@ object UserRecordService {
   }
 
   def suspend(): SourcedUpdate[UserRecord, Suspended, Unit] = source(_ => Suspended().asRight)
-}

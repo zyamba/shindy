@@ -4,7 +4,7 @@ import fs2.Stream
 
 import java.util.UUID
 
-trait EventStore[EVENT, STATE, F[_]] {
+trait EventStore[EVENT, STATE, F[_]]:
 
   def loadEvents(aggregateId: UUID, fromVersion: Option[Int] = None): Stream[F, VersionedEvent[EVENT]]
 
@@ -21,4 +21,3 @@ trait EventStore[EVENT, STATE, F[_]] {
   def loadLatestStateSnapshot(aggregateId: UUID): F[Option[(STATE, Int)]]
 
   def storeSnapshot(aggregateId: UUID, state: STATE, version: Int): F[Int]
-}

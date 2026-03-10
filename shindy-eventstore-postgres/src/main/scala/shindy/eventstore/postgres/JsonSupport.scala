@@ -2,13 +2,13 @@ package shindy.eventstore.postgres
 
 import cats.Show
 import cats.data.NonEmptyList
-import cats.syntax.either._
-import cats.syntax.show._
+import cats.syntax.either.*
+import cats.syntax.show.*
 import doobie.util.{Get, Put}
 import io.circe.{Json, parser}
 import org.postgresql.util.PGobject
 
-private[postgres] object JsonSupport {
+private[postgres] object JsonSupport:
   implicit val showPGobject: Show[PGobject] = Show.show(_.getValue.take(250))
 
   implicit val jsonGet: Get[Json] =
@@ -23,4 +23,3 @@ private[postgres] object JsonSupport {
       o.setValue(j.noSpaces)
       o
     }
-}

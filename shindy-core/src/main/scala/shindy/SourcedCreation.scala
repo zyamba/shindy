@@ -2,17 +2,16 @@ package shindy
 
 import scala.language.{higherKinds, implicitConversions, reflectiveCalls}
 
-object SourcedCreation {
+object SourcedCreation:
   def apply[STATE, EVENT, A](
       create: => Either[String, STATE],
       upd: SourcedUpdate[STATE, EVENT, A]
   ): SourcedCreation[STATE, EVENT, A] = new SourcedCreation(create, upd)
-}
 
 class SourcedCreation[STATE, +EVENT, A](
     create: => Either[String, STATE],
     upd: SourcedUpdate[STATE, EVENT, A]
-) {
+):
 
   /** Widen [[EVENT]] type to [[E]]
     *
@@ -38,4 +37,3 @@ class SourcedCreation[STATE, +EVENT, A](
 
   def andThen[E >: EVENT, B](cont: A => SourcedUpdate[STATE, E, B]): SourcedCreation[STATE, E, B] =
     SourcedCreation(create, upd andThen cont)
-}

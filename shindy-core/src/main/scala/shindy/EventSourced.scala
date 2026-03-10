@@ -2,25 +2,23 @@ package shindy
 
 import cats.Eval
 import cats.data.ReaderWriterStateT
-import cats.instances.either._
-import cats.syntax.option._
+import cats.instances.either.*
+import cats.syntax.option.*
 
 import scala.language.reflectiveCalls
 import scala.reflect.ClassTag
 
 type MaybeError[A] = Either[String, A]
 
-object EventSourced {
+object EventSourced:
   type EventHandler[S, E] = (Option[S], E) => S
 
-  object EventHandler {
+  object EventHandler:
     // noinspection ConvertExpressionToSAM
-    def apply[S, E](fn: PartialFunction[(Option[S], E), S]): EventHandler[S, E] = new EventHandler[S, E] {
+    def apply[S, E](fn: PartialFunction[(Option[S], E), S]): EventHandler[S, E] = new EventHandler[S, E]:
       override def apply(s: Option[S], e: E): S =
-        if (fn.isDefinedAt((s, e))) fn((s, e))
+        if fn.isDefinedAt((s, e)) then fn((s, e))
         else sys.error(s"Unhandled event $e for state $s")
-    }
-  }
 
   /** Builds SourcedCreation from `Either[String, EVENT]`
     */
@@ -82,13 +80,12 @@ object EventSourced {
   def when[STATE, S <: STATE: ClassTag, EVENT, B](
       predicate: S => Boolean,
       sourcedUpdate: SourcedUpdate[STATE, EVENT, B]
-  ): SourcedUpdate[STATE, EVENT, Option[B]] = {
+  ): SourcedUpdate[STATE, EVENT, Option[B]] =
     val condUpdate: S => SourcedUpdate[STATE, EVENT, Option[B]] = {
       case s: S if predicate(s) => sourcedUpdate.map(_.some)
       case _                    => SourcedUpdate.pure(None)
     }
     whenStateIs(condUpdate).map(_.flatten)
-  }
 
   /** Conditionally execute given update if the current state of type [[S]]
     *
@@ -99,20 +96,19 @@ object EventSourced {
     */
   def whenStateIs[STATE, S <: STATE: ClassTag, EVENT, B](
       upd: S => SourcedUpdate[STATE, EVENT, B]
-  ): SourcedUpdate[STATE, EVENT, Option[B]] = {
+  ): SourcedUpdate[STATE, EVENT, Option[B]] =
     val nop: SourcedUpdate[STATE, EVENT, Option[B]] = SourcedUpdate.pure(None)
     nop.get.flatMap {
       case s: S => upd(s).map(Option.apply)
       case _    => nop
     }
-  }
 
   /** Builder that helps scala compiler infer event type
     */
-  class sourceNewPartiallyApplied[STATE] {
+  class sourceNewPartiallyApplied[STATE]:
     def apply[EVENT](block: => Either[String, EVENT])(implicit
         eventHandler: EventHandler[STATE, EVENT]
-    ): SourcedCreation[STATE, EVENT, Unit] = {
+    ): SourcedCreation[STATE, EVENT, Unit] =
       val eventEval = Eval.later(block)
       val stateEval = eventEval.map(_.map { ev =>
         eventHandler(Option.empty[STATE], ev)
@@ -121,14 +117,11 @@ object EventSourced {
       // sourceUpdate is not just pure value but it has to hold creation event
       // since the state was originated from an event
       val sourceUpdate = pureNop.flatMap[Unit] { _ =>
-        eventEval.value match {
+        eventEval.value match
           case Left(msg) => sourceError(msg)
           case Right(ev) => pureNop.tell(ev)
-        }
       }
       SourcedCreation(stateEval.value, sourceUpdate)
-    }
-  }
 
   /** Convert given block to ReaderWriterStateT that can be used by `SourcedUpdate`
     */
@@ -142,4 +135,3 @@ object EventSourced {
       (events, finalState, out)
     }
   }
-}

@@ -11,14 +11,13 @@ private class InMemoryEventStore[EVENT, STATE](
       VersionedEvent[EVENT]
     ]] = mutable.Map.empty[UUID, Vector[VersionedEvent[EVENT]]],
     val stateSnapshot: mutable.Map[UUID, (STATE, Int)] = mutable.Map.empty[UUID, (STATE, Int)]
-) extends EventStore[EVENT, STATE, IO] {
+) extends EventStore[EVENT, STATE, IO]:
 
-  override def loadEvents(aggregateId: UUID, fromVersion: Option[Int]): fs2.Stream[IO, VersionedEvent[EVENT]] = {
+  override def loadEvents(aggregateId: UUID, fromVersion: Option[Int]): fs2.Stream[IO, VersionedEvent[EVENT]] =
     fs2.Stream.evalSeq(IO {
       val minVersion = fromVersion.getOrElse(0)
       eventsStore(aggregateId).filter(_.version >= minVersion)
     })
-  }
 
   override def storeEvents(aggregateId: UUID, events: Vector[VersionedEvent[EVENT]]): IO[Unit] = IO {
     val storedEvents = eventsStore.getOrElseUpdate(aggregateId, Vector.empty)
@@ -41,4 +40,3 @@ private class InMemoryEventStore[EVENT, STATE](
     stateSnapshot.update(aggregateId, state -> version)
     1
   }
-}

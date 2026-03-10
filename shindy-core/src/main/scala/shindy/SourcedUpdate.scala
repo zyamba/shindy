@@ -1,28 +1,23 @@
 package shindy
 import cats.data.ReaderWriterStateT
-import cats.instances.either._
-import cats.instances.vector._
+import cats.instances.either.*
+import cats.instances.vector.*
 
 import scala.annotation.unchecked.uncheckedVariance
 import scala.language.{implicitConversions, reflectiveCalls}
 
-object SourcedUpdate {
+object SourcedUpdate:
   def pure[STATE, EVENT] = new purePartiallyApplied[STATE, EVENT]
 
-  class purePartiallyApplied[STATE, EVENT]() {
-    def apply[A](a: A): SourcedUpdate[STATE, EVENT, A] = {
+  class purePartiallyApplied[STATE, EVENT]():
+    def apply[A](a: A): SourcedUpdate[STATE, EVENT, A] =
       val pureRun = ReaderWriterStateT.pure[MaybeError, Unit, Vector[EVENT], STATE, A](a)
       SourcedUpdate(pureRun)
-    }
-  }
 
-  extension [S, E, A](self: SourcedUpdate[S, E, A]) {
+  extension [S, E, A](self: SourcedUpdate[S, E, A])
     def map[B](f: A => B): SourcedUpdate[S, E, B] = SourcedUpdate(self.widen[E].run.map(f))
 
     def flatMap[B](f: A => SourcedUpdate[S, E, B]): SourcedUpdate[S, E, B] = self.andThen(f)
-  }
-
-}
 
 /** Sourced update operation with [[A]] as an output. Can be chained using andThen method to create complex operations.
   *
@@ -39,7 +34,7 @@ object SourcedUpdate {
   */
 case class SourcedUpdate[STATE, +EVENT, +A](
     run: ReaderWriterStateT[MaybeError, Unit, Vector[EVENT @uncheckedVariance], STATE, A @uncheckedVariance]
-) {
+):
 
   /** Widen event type. Useful when using for comprehension instead of `andThen` method:
     * {{{
@@ -104,4 +99,3 @@ case class SourcedUpdate[STATE, +EVENT, +A](
 
   private[shindy] def tell[E >: EVENT](event: E): SourcedUpdate[STATE, E, A] =
     SourcedUpdate(this.widen[E].run.tell(Vector(event)))
-}

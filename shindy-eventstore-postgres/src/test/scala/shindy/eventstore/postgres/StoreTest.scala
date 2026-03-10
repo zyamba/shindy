@@ -31,31 +31,27 @@ import java.time.{LocalDateTime, ZoneId}
 import java.util.{Calendar, UUID}
 import scala.language.reflectiveCalls
 
-object StoreTest {
-  private val userRecGen = for {
+object StoreTest:
+  private val userRecGen = for
     id <- arbitrary[UUID]
     email <- Gen.alphaStr.suchThat(_.nonEmpty).map(_ + "@test.com")
     arbDate <- Gen.option(arbitrary[Calendar].map(_.toInstant.atZone(ZoneId.systemDefault())).map(_.toLocalDate))
-  } yield UserRecord(id, email, arbDate)
+  yield UserRecord(id, email, arbDate)
 
   implicit val arbUserRecGen: Arbitrary[UserRecord] = Arbitrary(userRecGen)
 
   case class DatabaseConfig(hostname: String, database: String, username: String, password: String, port: Int)
-      derives pureconfig.ConfigReader {
+      derives pureconfig.ConfigReader:
     lazy val jdbcUrl = s"jdbc:postgresql://$hostname:$port/$database"
-  }
-}
 
-trait StoreInitializer {
+trait StoreInitializer:
   private val executeCreateDbScript = Kleisli[IO, Connection, Unit] { (connection: Connection) =>
     IO {
       val is = getClass.getResourceAsStream("/create_database.sql")
-      try {
+      try
         val sql = scala.io.Source.fromInputStream(is, "UTF-8").mkString
         connection.prepareStatement(sql).execute()
-      } finally {
-        is.close()
-      }
+      finally is.close()
     }
   }
 
@@ -71,7 +67,6 @@ trait StoreInitializer {
     tx.exec.apply(executeCreateDbScript).unsafeRunAndForget()(IORuntime.global)
     tx
   }
-}
 
 class StoreTest
     extends AsyncFreeSpec
@@ -81,7 +76,7 @@ class StoreTest
     with Matchers
     with Hydration[UserRecord, UserRecordChangeEvent]
     with StoreInitializer
-    with EventStoreBehaviors {
+    with EventStoreBehaviors:
 
   import StoreTest.*
 
@@ -116,4 +111,3 @@ class StoreTest
       }
     }
   }
-}
