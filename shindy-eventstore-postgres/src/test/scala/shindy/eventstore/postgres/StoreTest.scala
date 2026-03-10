@@ -56,13 +56,15 @@ trait StoreInitializer:
   val transactorEval: Eval[Aux[IO, Unit]] = Eval.later {
     val dbConf = ConfigSource.default.at("db").loadOrThrow[DatabaseConfig]
 
-    val tx = Transactor.fromDriverManager[IO].apply(
-      "org.postgresql.Driver",
-      dbConf.jdbcUrl,
-      dbConf.username,
-      dbConf.password,
-      None
-    )
+    val tx = Transactor
+      .fromDriverManager[IO]
+      .apply(
+        "org.postgresql.Driver",
+        dbConf.jdbcUrl,
+        dbConf.username,
+        dbConf.password,
+        None
+      )
     tx.exec.apply(executeCreateDbScript).unsafeRunAndForget()(IORuntime.global)
     tx
   }
