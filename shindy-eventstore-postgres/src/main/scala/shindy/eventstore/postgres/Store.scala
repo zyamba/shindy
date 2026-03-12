@@ -8,24 +8,25 @@ import doobie.postgres.implicits.*
 import doobie.util.transactor.Transactor
 import doobie.util.update.Update
 import doobie.util.{Read, fragment, update}
+import io.circe.Decoder.Result
 import io.circe.syntax.*
 import io.circe.{Decoder, Encoder, Json}
-import shindy.eventstore.{EventStore, VersionedEvent}
 import shindy.eventstore.postgres.JsonSupport.*
+import shindy.eventstore.{EventStore, VersionedEvent}
 
-import java.time.LocalDateTime
 import java.util.UUID
 
 object Store:
-  def newStore[F[_]: MonadCancelThrow: Transactor: Concurrent] = new storePartiallyApplied[F]()
+  def newStore[F[_]: MonadCancelThrow: Transactor: Concurrent] = new StorePartiallyApplied[F]()
 
-  class storePartiallyApplied[F[_]: Monad: MonadCancelThrow]()(using xa: Transactor[F], concurrent: Concurrent[F]):
+  class StorePartiallyApplied[F[_]: Monad: MonadCancelThrow]()(using xa: Transactor[F], concurrent: Concurrent[F]):
     def forAggregate[STATE: Decoder: Encoder, EVENT: Decoder: Encoder](aggregateType: String) =
       new StoreZ[STATE, EVENT, F](aggregateType)
 
   private def selectEvents(aggregateId: UUID): fragment.Fragment =
     sql"select serial_num, aggregate_id, aggregate_type, aggregate_version, event_body, event_time from event" ++
       fr" where aggregate_id = $aggregateId"
+
   private[postgres] val insertEvent: update.Update[(String, UUID, Int, Json)] =
     Update.apply[(String, UUID, Int, Json)](
       "insert into event (aggregate_type, aggregate_id, aggregate_version, event_body) values (?,?,?,?)"
@@ -52,24 +53,25 @@ object Store:
     sql"select aggregate_version, state_snapshot, create_time from state_snapshot" ++
       fr" where aggregate_id = $aggregateId"
 
-class StoreZ[STATE: Decoder: Encoder, EVENT: Decoder: Encoder, F[_]: Monad: MonadCancelThrow](
+class StoreZ[STATE: Decoder: Encoder, EVENT: Decoder: Encoder, F[_]: Monad: MonadCancelThrow: Concurrent](
     aggregateType: String
-)(using transactor: Transactor[F], concurrent: Concurrent[F])
+)(using transactor: Transactor[F])
     extends EventStore[EVENT, STATE, F]:
 
   import Store.*
-
-  summon[Read[UUID]]
-  summon[Read[LocalDateTime]]
-  summon[Read[Json]]
-  summon[Read[StoreEvent]]
 
   override def loadEvents(aggregateId: UUID, fromVersion: Option[Int]): fs2.Stream[F, VersionedEvent[EVENT]] =
     selectEvents(aggregateId, fromVersion)
       .query[StoreEvent]
       .stream
       .transact(transactor)
-      .map(se => VersionedEvent(decodeFromJson[EVENT](se.eventBody), se.aggregateVersion))
+      .flatMap { se =>
+        decodeFromJson[EVENT](se.eventBody)
+          .fold(
+            err => fs2.Stream.raiseError(err),
+            event => fs2.Stream(VersionedEvent(event, se.aggregateVersion))
+          )
+      }
 
   override def storeEvents(aggregateId: UUID, events: Vector[VersionedEvent[EVENT]]): F[Unit] =
     val convertedEvents = events.map(ev => (aggregateType, aggregateId, ev.version, Encoder[EVENT].apply(ev.event)))
@@ -81,14 +83,18 @@ class StoreZ[STATE: Decoder: Encoder, EVENT: Decoder: Encoder, F[_]: Monad: Mona
   override def loadLatestStateSnapshot(aggregateId: UUID): F[Option[(STATE, Int)]] =
     findStateSnapshot(aggregateId)
       .query[StateSnapshot]
-      .map { lastSnapshot =>
-        decodeFromJson[STATE](lastSnapshot.stateSnapshot) -> lastSnapshot.version
-      }
       .option
       .transact(transactor)
+      .flatMap: maybeLastSnapshot =>
+        maybeLastSnapshot
+          .fold(MonadCancelThrow[F].pure(Option.empty[(STATE, Int)])): lastSnapshot =>
+            decodeFromJson[STATE](lastSnapshot.stateSnapshot)
+              .fold(
+                MonadCancelThrow[F].raiseError(_),
+                stateSnapshot => MonadCancelThrow[F].pure(Some(stateSnapshot -> lastSnapshot.version))
+              )
 
   override def storeSnapshot(aggregateId: UUID, state: STATE, version: Int): F[Int] =
     insertState(aggregateId, version, state.asJson).run.transact(transactor)
 
-  private def decodeFromJson[T: Decoder](json: Json): T =
-    Decoder[T].decodeJson(json).fold(throw _, identity)
+  private def decodeFromJson[T: Decoder](json: Json): Result[T] = Decoder[T].decodeJson(json)

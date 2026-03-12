@@ -10,7 +10,7 @@ object Dependencies {
     val pureconfig = "0.17.10"
     val doobie = "1.0.0-RC12"
     val postgresqlJdbcDriver = "42.7.10"
-    val hikariCp = "5.0.1"
+    val hikariCp = "7.0.2"
     val fs2 = "3.12.2"
   }
 

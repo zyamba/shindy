@@ -34,7 +34,7 @@ object UserService:
   case class AddressAdded(newAddress: Address) extends UserRecordChangeEvent
 
   // state machine
-  implicit val eventHandler: EventHandler[UserRecord, UserRecordChangeEvent] = EventHandler {
+  given EventHandler[UserRecord, UserRecordChangeEvent] = EventHandler:
     case (None, ev: UserCreated) => UserRecord(ev.id, ev.email)
 
     case (Some(s: UserRecord), ev: EmailUpdated) => s.copy(email = ev.newEmail)
@@ -42,7 +42,6 @@ object UserService:
     case (Some(u: UserRecord), BirthdateUpdated(newDate)) => u.copy(birthdate = Some(newDate))
 
     case (Some(u: UserRecord), AddressAdded(a)) => u.copy(addresses = u.addresses :+ a)
-  }
 
   // business logic
   def createUser(id: UUID, email: String): SourcedCreation[UserRecord, UserCreated, UUID] =
@@ -77,8 +76,8 @@ object UserService:
 
   // composing multiple actions into single action
   def createUser(email: String, birthDate: LocalDate): SourcedCreation[UserRecord, UserRecordChangeEvent, UUID] =
-    // Side effect that produces id is outside of the `source` scope. Thus it remains pure.
-    // In other words "id" value remain unchanged if source executed more then once (in case of a retry for example).
+    // Side effect that produces id is outside the `source` scope. Thus, it remains pure.
+    // In other words "id" value remain unchanged if source executed more than once (in case of a retry for example).
     val id = UUID.randomUUID()
     createUser(id, email) andThen { id =>
       changeBirthdate(birthDate).map(_ => id)
@@ -98,8 +97,7 @@ object UserService:
       * UserRecord(c6e105bb-0227-4c0c-b106-a0be5ae0f204,test@email.com,Some(1970-01-01), Vector(Address(United
       * States,10001,1 Main str,None,Some(NY))))
       */
-    smallProgram.run.map { case (events, finalState, out) =>
+    smallProgram.run.map: (events, finalState, out) =>
       println(events.zipWithIndex.map(l => s"${l._2}: ${l._1}").mkString("\n"))
       println("\n")
       println(finalState)
-    }

@@ -4,7 +4,6 @@ import cats.instances.either.*
 import cats.instances.vector.*
 
 import scala.annotation.unchecked.uncheckedVariance
-import scala.language.{implicitConversions, reflectiveCalls}
 
 object SourcedUpdate:
   def pure[STATE, EVENT] = new purePartiallyApplied[STATE, EVENT]

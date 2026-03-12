@@ -43,17 +43,15 @@ object StoreTest:
     lazy val jdbcUrl = s"jdbc:postgresql://$hostname:$port/$database"
 
 trait StoreInitializer:
-  private val executeCreateDbScript = Kleisli[IO, Connection, Unit] { (connection: Connection) =>
-    IO {
+  private val executeCreateDbScript = Kleisli[IO, Connection, Unit]: connection =>
+    IO:
       val is = getClass.getResourceAsStream("/create_database.sql")
       try
         val sql = scala.io.Source.fromInputStream(is, "UTF-8").mkString
         connection.prepareStatement(sql).execute()
       finally is.close()
-    }
-  }
 
-  val transactorEval: Eval[Aux[IO, Unit]] = Eval.later {
+  val transactorEval: Eval[Aux[IO, Unit]] = Eval.later:
     val dbConf = ConfigSource.default.at("db").loadOrThrow[DatabaseConfig]
 
     val tx = Transactor
@@ -67,7 +65,6 @@ trait StoreInitializer:
       )
     tx.exec.apply(executeCreateDbScript).unsafeRunAndForget()(IORuntime.global)
     tx
-  }
 
 class StoreTest
     extends AsyncFreeSpec
