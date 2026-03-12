@@ -1,7 +1,5 @@
 package shindy
 
-import scala.language.{higherKinds, implicitConversions, reflectiveCalls}
-
 object SourcedCreation:
   def apply[STATE, EVENT, A](
       create: => Either[String, STATE],

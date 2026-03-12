@@ -29,7 +29,7 @@ object UserService {
   case class AddressAdded(newAddress: Address) extends UserRecordChangeEvent
 
   // state machine
-  implicit val eventHandler: EventHandler[UserRecord, UserRecordChangeEvent] = EventHandler {
+  given eventHandler: EventHandler[UserRecord, UserRecordChangeEvent] = EventHandler {
     case (None, ev: UserCreated) => UserRecord(ev.id, ev.email)
 
     case (Some(s: UserRecord), ev: EmailUpdated) => s.copy(email = ev.newEmail)

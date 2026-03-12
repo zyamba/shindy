@@ -27,7 +27,7 @@ object UserRecordService:
   case class Suspended() extends UserRecordChangeEvent
 
   // state machine
-  implicit val eventHandler: EventHandler[UserRecord, UserRecordChangeEvent] = EventHandler {
+  given eventHandler: EventHandler[UserRecord, UserRecordChangeEvent] = EventHandler {
     case (None, ev: UserCreated) => UserRecordActive(ev.id, ev.email)
 
     case (Some(s: UserRecordActive), ev: EmailUpdated) => s.copy(email = ev.newEmail)

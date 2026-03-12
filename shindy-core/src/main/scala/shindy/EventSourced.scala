@@ -22,7 +22,7 @@ object EventSourced:
 
   /** Builds SourcedCreation from `Either[String, EVENT]`
     */
-  def sourceNew[STATE] = new sourceNewPartiallyApplied[STATE]()
+  def sourceNew[STATE] = new SourceNewPartiallyApplied[STATE]()
 
   /** Produces new SourcedCreation without logging any events.
     */
@@ -41,7 +41,7 @@ object EventSourced:
     * @return
     *   SourcedUpdate[STATE, EVENT, Unit] from given block.
     */
-  def source[STATE, EVENT](block: STATE => Either[String, EVENT])(implicit
+  def source[STATE, EVENT](block: STATE => Either[String, EVENT])(using
       eventHandler: EventHandler[STATE, EVENT]
   ): SourcedUpdate[STATE, EVENT, Unit] = sourceOut(block(_).map((_, ())))
 
@@ -58,7 +58,7 @@ object EventSourced:
   /** Similar to `source` but allows returning extra value that can be pushed to next step when using `andThen`
     * composition.
     */
-  def sourceOut[STATE, EVENT, Out](block: STATE => Either[String, (EVENT, Out)])(implicit
+  def sourceOut[STATE, EVENT, Out](block: STATE => Either[String, (EVENT, Out)])(using
       eventHandler: EventHandler[STATE, EVENT]
   ): SourcedUpdate[STATE, EVENT, Out] = sourceOutExt(block(_).map { case (ev, out) =>
     (Vector(ev), out)
@@ -66,7 +66,7 @@ object EventSourced:
 
   /** Similar to `sourceOut` but allows returning many events at once.
     */
-  def sourceOutExt[STATE, EVENT, Out](block: STATE => Either[String, (Vector[EVENT], Out)])(implicit
+  def sourceOutExt[STATE, EVENT, Out](block: STATE => Either[String, (Vector[EVENT], Out)])(using
       eventHandler: EventHandler[STATE, EVENT]
   ): SourcedUpdate[STATE, EVENT, Out] = SourcedUpdate(sourceInt(block))
 
@@ -105,33 +105,27 @@ object EventSourced:
 
   /** Builder that helps scala compiler infer event type
     */
-  class sourceNewPartiallyApplied[STATE]:
-    def apply[EVENT](block: => Either[String, EVENT])(implicit
+  class SourceNewPartiallyApplied[STATE]:
+    def apply[EVENT](block: => Either[String, EVENT])(using
         eventHandler: EventHandler[STATE, EVENT]
     ): SourcedCreation[STATE, EVENT, Unit] =
       val eventEval = Eval.later(block)
-      val stateEval = eventEval.map(_.map { ev =>
-        eventHandler(Option.empty[STATE], ev)
-      })
+      val stateEval = eventEval.map(_.map(eventHandler(Option.empty[STATE], _)))
       val pureNop = SourcedUpdate.pure[STATE, EVENT](())
-      // sourceUpdate is not just pure value but it has to hold creation event
+      // sourceUpdate is not just pure value, but it has to hold creation event
       // since the state was originated from an event
-      val sourceUpdate = pureNop.flatMap[Unit] { _ =>
+      val sourceUpdate = pureNop.flatMap[Unit]: _ =>
         eventEval.value match
           case Left(msg) => sourceError(msg)
           case Right(ev) => pureNop.tell(ev)
-      }
       SourcedCreation(stateEval.value, sourceUpdate)
 
   /** Convert given block to ReaderWriterStateT that can be used by `SourcedUpdate`
     */
-  private def sourceInt[Out, EVENT, STATE](block: STATE => Either[String, (Vector[EVENT], Out)])(implicit
+  private def sourceInt[Out, EVENT, STATE](block: STATE => Either[String, (Vector[EVENT], Out)])(using
       eventHandler: EventHandler[STATE, EVENT]
-  ): ReaderWriterStateT[MaybeError, Unit, Vector[EVENT], STATE, Out] = ReaderWriterStateT { (_, startState) =>
-    block(startState).map { case (events, out) =>
-      val finalState = events.foldLeft(startState) { case (state, event) =>
-        eventHandler(Some(state), event)
-      }
+  ): ReaderWriterStateT[MaybeError, Unit, Vector[EVENT], STATE, Out] = ReaderWriterStateT: (_, startState) =>
+    block(startState).map: (events, out) =>
+      val finalState = events.foldLeft(startState):
+        (state, event) => eventHandler(Some(state), event)
       (events, finalState, out)
-    }
-  }

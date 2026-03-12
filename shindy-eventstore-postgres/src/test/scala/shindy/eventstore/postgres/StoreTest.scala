@@ -36,24 +36,22 @@ object StoreTest:
     arbDate <- Gen.option(arbitrary[Calendar].map(_.toInstant.atZone(ZoneId.systemDefault())).map(_.toLocalDate))
   yield UserRecord(id, email, arbDate)
 
-  implicit val arbUserRecGen: Arbitrary[UserRecord] = Arbitrary(userRecGen)
+  given arbUserRecGen: Arbitrary[UserRecord] = Arbitrary(userRecGen)
 
   case class DatabaseConfig(hostname: String, database: String, username: String, password: String, port: Int)
       derives pureconfig.ConfigReader:
     lazy val jdbcUrl = s"jdbc:postgresql://$hostname:$port/$database"
 
 trait StoreInitializer:
-  private val executeCreateDbScript = Kleisli[IO, Connection, Unit] { (connection: Connection) =>
-    IO {
+  private val executeCreateDbScript = Kleisli[IO, Connection, Unit]: connection =>
+    IO:
       val is = getClass.getResourceAsStream("/create_database.sql")
       try
         val sql = scala.io.Source.fromInputStream(is, "UTF-8").mkString
         connection.prepareStatement(sql).execute()
       finally is.close()
-    }
-  }
 
-  val transactorEval: Eval[Aux[IO, Unit]] = Eval.later {
+  val transactorEval: Eval[Aux[IO, Unit]] = Eval.later:
     val dbConf = ConfigSource.default.at("db").loadOrThrow[DatabaseConfig]
 
     val tx = Transactor
@@ -67,7 +65,6 @@ trait StoreInitializer:
       )
     tx.exec.apply(executeCreateDbScript).unsafeRunAndForget()(IORuntime.global)
     tx
-  }
 
 class StoreTest
     extends AsyncFreeSpec
