@@ -59,10 +59,10 @@ class StoreZ[STATE: Decoder: Encoder, EVENT: Decoder: Encoder, F[_]: Monad: Mona
 
   import Store.*
 
-  implicitly[Read[UUID]]
-  implicitly[Read[LocalDateTime]]
-  implicitly[Read[Json]]
-  implicitly[Read[StoreEvent]]
+  summon[Read[UUID]]
+  summon[Read[LocalDateTime]]
+  summon[Read[Json]]
+  summon[Read[StoreEvent]]
 
   override def loadEvents(aggregateId: UUID, fromVersion: Option[Int]): fs2.Stream[F, VersionedEvent[EVENT]] =
     selectEvents(aggregateId, fromVersion)

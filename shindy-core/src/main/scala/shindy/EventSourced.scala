@@ -41,7 +41,7 @@ object EventSourced:
     * @return
     *   SourcedUpdate[STATE, EVENT, Unit] from given block.
     */
-  def source[STATE, EVENT](block: STATE => Either[String, EVENT])(implicit
+  def source[STATE, EVENT](block: STATE => Either[String, EVENT])(using
       eventHandler: EventHandler[STATE, EVENT]
   ): SourcedUpdate[STATE, EVENT, Unit] = sourceOut(block(_).map((_, ())))
 
@@ -58,7 +58,7 @@ object EventSourced:
   /** Similar to `source` but allows returning extra value that can be pushed to next step when using `andThen`
     * composition.
     */
-  def sourceOut[STATE, EVENT, Out](block: STATE => Either[String, (EVENT, Out)])(implicit
+  def sourceOut[STATE, EVENT, Out](block: STATE => Either[String, (EVENT, Out)])(using
       eventHandler: EventHandler[STATE, EVENT]
   ): SourcedUpdate[STATE, EVENT, Out] = sourceOutExt(block(_).map { case (ev, out) =>
     (Vector(ev), out)
@@ -66,7 +66,7 @@ object EventSourced:
 
   /** Similar to `sourceOut` but allows returning many events at once.
     */
-  def sourceOutExt[STATE, EVENT, Out](block: STATE => Either[String, (Vector[EVENT], Out)])(implicit
+  def sourceOutExt[STATE, EVENT, Out](block: STATE => Either[String, (Vector[EVENT], Out)])(using
       eventHandler: EventHandler[STATE, EVENT]
   ): SourcedUpdate[STATE, EVENT, Out] = SourcedUpdate(sourceInt(block))
 
@@ -106,7 +106,7 @@ object EventSourced:
   /** Builder that helps scala compiler infer event type
     */
   class sourceNewPartiallyApplied[STATE]:
-    def apply[EVENT](block: => Either[String, EVENT])(implicit
+    def apply[EVENT](block: => Either[String, EVENT])(using
         eventHandler: EventHandler[STATE, EVENT]
     ): SourcedCreation[STATE, EVENT, Unit] =
       val eventEval = Eval.later(block)
@@ -125,7 +125,7 @@ object EventSourced:
 
   /** Convert given block to ReaderWriterStateT that can be used by `SourcedUpdate`
     */
-  private def sourceInt[Out, EVENT, STATE](block: STATE => Either[String, (Vector[EVENT], Out)])(implicit
+  private def sourceInt[Out, EVENT, STATE](block: STATE => Either[String, (Vector[EVENT], Out)])(using
       eventHandler: EventHandler[STATE, EVENT]
   ): ReaderWriterStateT[MaybeError, Unit, Vector[EVENT], STATE, Out] = ReaderWriterStateT { (_, startState) =>
     block(startState).map { case (events, out) =>

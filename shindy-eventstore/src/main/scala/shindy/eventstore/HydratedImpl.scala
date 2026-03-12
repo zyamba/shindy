@@ -14,7 +14,7 @@ private[shindy] object HydratedImpl:
   def createNew[STATE, EVENT, F[_]: MonadCancelThrow](
       sc: SourcedCreation[STATE, EVENT, UUID],
       snapshotInterval: Option[Int] = None
-  )(implicit
+  )(using
       eventHandler: EventHandler[STATE, EVENT]
   ): Hydrated[STATE, EVENT, Unit, F] =
     new HydratedImpl(
@@ -26,7 +26,7 @@ private[shindy] object HydratedImpl:
   def hydrate[STATE, EVENT, F[_]: MonadCancelThrow](
       aggregateId: UUID,
       snapshotInterval: Option[Int] = None
-  )(implicit
+  )(using
       eventHandler: EventHandler[STATE, EVENT],
       evCompiler: fs2.Compiler[F, F]
   ): Hydrated[STATE, EVENT, Unit, F] = new HydratedImpl(

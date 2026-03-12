@@ -1,6 +1,6 @@
 package shindy
 
-import scala.language.{higherKinds, implicitConversions, reflectiveCalls}
+import scala.language.{implicitConversions, reflectiveCalls}
 
 object SourcedCreation:
   def apply[STATE, EVENT, A](

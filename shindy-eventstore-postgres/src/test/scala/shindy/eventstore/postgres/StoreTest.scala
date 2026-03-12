@@ -36,7 +36,7 @@ object StoreTest:
     arbDate <- Gen.option(arbitrary[Calendar].map(_.toInstant.atZone(ZoneId.systemDefault())).map(_.toLocalDate))
   yield UserRecord(id, email, arbDate)
 
-  implicit val arbUserRecGen: Arbitrary[UserRecord] = Arbitrary(userRecGen)
+  given arbUserRecGen: Arbitrary[UserRecord] = Arbitrary(userRecGen)
 
   case class DatabaseConfig(hostname: String, database: String, username: String, password: String, port: Int)
       derives pureconfig.ConfigReader:
