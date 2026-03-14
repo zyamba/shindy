@@ -9,14 +9,26 @@ import scala.language.{implicitConversions, reflectiveCalls}
 object SourcedEval:
   def pure[S, E] = new purePartiallyApplied[S, E]
 
-  class purePartiallyApplied[S, E]():
+  class purePartiallyApplied[S, E]:
     def apply[A](a: A): SourcedEval[S, S, E, A] =
       SourcedEval(ReaderWriterStateT.pure[MaybeError, Unit, Vector[E], S, A](a))
 
   extension [IN, S, E, A](self: SourcedEval[IN, S, E, A])
-    def map[B](f: A => B): SourcedEval[IN, S, E, B] = SourcedEval(self.widen[E].readerWriterState.map(f))
+    def map[B](f: A => B): SourcedEval[IN, S, E, B] = self.mapInt(f)
 
     def flatMap[B](f: A => SourcedEval[S, S, E, B]): SourcedEval[IN, S, E, B] = self.andThen(f)
+
+    /** Run this program with given initial state and return events, final state and resulting value
+      *
+      * @param initialState
+      *   starting state
+      */
+    def run(initialState: IN): Either[String, (Vector[E], S, A)] = self.runInternal(initialState)
+
+  extension [S, E, A](self: SourcedEval[Unit, S, E, A])
+    /** Run this program and return events, final state and resulting value
+      */
+    def run: Either[String, (Vector[E], S, A)] = self.runInternal(())
 
 /** Sourced update operation with [[A]] as an output. Can be chained using andThen method to create complex operations.
   *
@@ -48,8 +60,8 @@ case class SourcedEval[SA, S, +E, +A](
     * case class PasswordChangedEvent(...) extends UserEvent
     * ...
     *
-    * val changeUsername: SourcedUpdate[UserRecord, UsernameChangedEvent, Unit] = ???
-    * val changePassword: SourcedUpdate[UserRecord, PasswordChangedEvent, Unit] = ???
+    * val changeUsername: SourcedEval[UserRecord, UserRecord, UsernameChangedEvent, Unit] = ???
+    * val changePassword: SourcedEval[UserRecord, UserRecord, PasswordChangedEvent, Unit] = ???
     *
     * val changeBoth: SourcedEval[UserRecord, UserRecord, UserEvent, Unit] = for {
     *   _ <- changeUsername.widen[UserEvent]
@@ -83,29 +95,30 @@ case class SourcedEval[SA, S, +E, +A](
     */
   def state(initialState: SA): Either[String, S] = this.readerWriterState.runS((), initialState)
 
-  /** Run this program with given initial state and return events, final state and resulting value
-    *
-    * @param initialState
-    *   starting state
+  /** Compose two `SourceUpdate` into one
     */
-  def run(initialState: SA): Either[String, (Vector[E], S, A)] = this.readerWriterState.run((), initialState)
+  def andThen[EB >: E, B](next: SourcedEval[S, S, EB, B]): SourcedEval[SA, S, EB, B] =
+    andThen[EB, B]((_: A) => next)
 
   /** Compose two `SourceUpdate` into one
     */
-  def andThen[EB >: E, B](other: SourcedEval[S, S, EB, B]): SourcedEval[SA, S, EB, B] =
-    andThen[EB, B]((_: A) => other)
+  def andThen[EB >: E, B](next: A => SourcedEval[S, S, EB, B]): SourcedEval[SA, S, EB, B] = flatMapInt(next)
 
-  /** Compose two `SourceUpdate` into one
-    */
-  def andThen[EB >: E, B](other: A => SourcedEval[S, S, EB, B]): SourcedEval[SA, S, EB, B] =
-    SourcedEval(this.widen[EB].readerWriterState.flatMap(other(_).readerWriterState))
+  private def runInternal(initialState: SA): Either[String, (Vector[E], S, A)] =
+    this.readerWriterState.run((), initialState)
+
+  private def flatMapInt[EB >: E, B](next: A => SourcedEval[S, S, EB, B]) =
+    SourcedEval(this.widen[EB].readerWriterState.flatMap(next(_).readerWriterState))
+
+  private def mapInt[EB >: E, B](f: A => B) =
+    SourcedEval(this.widen[EB].readerWriterState.map(f))
 
   /** Modifies state. Only useful for initialization with a snapshot right now.
     */
   private[shindy] def modifyS[SB](block: S => MaybeError[SB]): SourcedEval[SA, SB, E, A] =
     SourcedEval(
-      this.readerWriterState.flatMap(a =>
+      this.readerWriterState.flatMap { a =>
         IndexedReaderWriterStateT: (e, s) =>
           block(s).map(sb => (Vector.empty, sb, a))
-      )
+      }
     )

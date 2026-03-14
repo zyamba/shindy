@@ -2,17 +2,16 @@ package shindy.eventstore
 
 import cats.effect.*
 import cats.effect.testing.scalatest.AsyncIOSpec
-import org.scalatest.{AsyncTestSuite, Tag}
-import org.scalatest.freespec.{AnyFreeSpec, AsyncFreeSpec}
-import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.freespec.AsyncFreeSpec
 import org.scalatest.matchers.should.Matchers
+import org.scalatest.{AsyncTestSuite, Tag}
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import shindy.examples.UserService.*
+import shindy.examples.UserService.UserAggregate.*
 import shindy.{EventSourced, SourcedEval}
 
 import java.time.LocalDate
 import java.util.UUID
-import scala.Function.tupled
 import scala.language.reflectiveCalls
 
 object DatabaseTest extends Tag("DatabaseTest")

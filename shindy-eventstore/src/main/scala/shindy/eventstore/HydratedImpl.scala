@@ -45,7 +45,7 @@ private[shindy] object HydratedImpl:
             }
           val value = foldedState.map { case (s, ver) =>
             EventSourced
-              .sourceState[STATE, EVENT](
+              .sourceWithState[STATE, EVENT](
                 Either.fromOption(s, s"Unable to load state for aggregate with ID=$aggregateId")
               )
               .map(_ => (aggregateId, snapshotVer.getOrElse(0), ver))
@@ -98,7 +98,7 @@ private class HydratedImpl[STATE, EVENT, A, F[_]: MonadCancelThrow](
         .andThen { idAndVer =>
           sourcedUpdate.map(a => (idAndVer._1, idAndVer._2, idAndVer._3, a))
         }
-        .run(())
+        .run
         .leftMap(new Exception(_))
         .map { case (newEvents, newState, (aggId, snapshotVersion, initialVersion, aOut)) =>
           val versionedEvents: Vector[VersionedEvent[EVENT]] = newEvents

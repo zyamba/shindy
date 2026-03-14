@@ -1,12 +1,11 @@
 package shindy.examples
 
+import cats.syntax.either.*
+import shindy.*
+import shindy.EventSourced.*
+
 import java.time.LocalDate
 import java.util.UUID
-
-import cats.syntax.either.*
-import shindy.EventSourced.*
-import shindy.*
-
 import scala.language.postfixOps
 
 object UserService:
@@ -27,7 +26,7 @@ object UserService:
   )
 
   // events
-  sealed trait UserRecordChangeEvent extends Product with Serializable
+  sealed trait UserRecordChangeEvent
   case class UserCreated(id: UUID, email: String) extends UserRecordChangeEvent
   case class EmailUpdated(newEmail: String) extends UserRecordChangeEvent
   case class BirthdateUpdated(birthdate: LocalDate) extends UserRecordChangeEvent
@@ -44,64 +43,68 @@ object UserService:
     case (Some(u: UserRecord), AddressAdded(a)) => u.copy(addresses = u.addresses :+ a)
   }
 
-  // business logic
-  def createUser(id: UUID, email: String): SourcedEval[Unit, UserRecord, UserCreated, UUID] =
-    sourceNew[UserRecord](UserCreated(id, email).asRight).map(_ => id)
+  // UserAggregate implementation
+  object UserAggregate extends EventSourced[UserRecord, UserRecordChangeEvent]:
+    def createUser(id: UUID, email: String) = sourceNew(UserCreated(id, email).asRight).map(_ => id)
 
-  def updateEmail(email: String): SourcedEval[UserRecord, UserRecord, EmailUpdated, Unit] = source { (_: UserRecord) =>
-    Either.cond(email.contains("@"), EmailUpdated(email), "email is invalid")
-  }
+    def updateEmail(email: String) = source: _ =>
+      Either.cond(email.contains("@"), EmailUpdated(email), "email is invalid")
 
-  def changeBirthdate(birthdate: LocalDate): SourcedEval[UserRecord, UserRecord, BirthdateUpdated, Unit] = source {
-    (_: UserRecord) =>
+    def changeBirthdate(birthdate: LocalDate) = source { _ =>
       Either.cond(
         birthdate.isBefore(LocalDate.of(2018, 1, 1)),
         BirthdateUpdated(birthdate),
         "Too young!"
       )
-  }
-
-  def addAddress(
-      country: String,
-      zip: String,
-      strLine1: String,
-      strLine2: Option[String] = None,
-      state: Option[String] = None
-  ): SourcedEval[UserRecord, UserRecord, AddressAdded, Unit] = {
-    source { _ =>
-      Either.cond(
-        country.nonEmpty && strLine1.nonEmpty && zip.nonEmpty,
-        AddressAdded(Address(country, zip, strLine1, strLine2, state)),
-        "Invalid address"
-      )
     }
-  }
 
-  // composing multiple actions into single action
-  def createUser(email: String, birthDate: LocalDate): SourcedEval[Unit, UserRecord, UserRecordChangeEvent, UUID] =
-    // Side effect that produces id is outside of the `source` scope. Thus it remains pure.
-    // In other words "id" value remain unchanged if source executed more then once (in case of a retry for example).
-    val id = UUID.randomUUID()
-    createUser(id, email) andThen { id =>
-      changeBirthdate(birthDate).map(_ => id)
-    }
+    def addAddress(
+        country: String,
+        zip: String,
+        strLine1: String,
+        strLine2: Option[String] = None,
+        state: Option[String] = None
+    ) =
+      source { _ =>
+        Either.cond(
+          country.nonEmpty && strLine1.nonEmpty && zip.nonEmpty,
+          AddressAdded(Address(country, zip, strLine1, strLine2, state)),
+          "Invalid address"
+        )
+      }
+
+    // composing multiple actions into a single method
+    def createCompleteUser(
+        email: String,
+        birthDate: LocalDate
+    ): SourcedEval[Unit, UserRecord, UserRecordChangeEvent, UUID] =
+      // Side effect that produces id is outside the `source` scope. Thus it remains pure.
+      // In other words "id" value remain unchanged if source executed more then once (in case of a retry for example).
+      for
+        u <- createUser(UUID.randomUUID(), email)
+        id <- changeBirthdate(birthDate).inspect(_.id)
+      yield id
 
   def main(args: Array[String]): Unit =
     // example of execution
-    val smallProgram = createUser("test@email.com", LocalDate.of(1970, 1, 1)) andThen {
-      addAddress("United States", "10001", "1 Main str", state = Some("NY"))
-    }
+    val program =
+      for
+        _ <- UserAggregate.createCompleteUser("test@email.com", LocalDate.of(1970, 1, 1))
+        _ <- UserAggregate.addAddress("United States", "10001", "1 Main str", state = Some("NY"))
+        _ <- UserAggregate.updateEmail("newemail@gmail.com")
+      yield ()
 
     /** Prints out:
       *
-      * 0: UserCreated(c6e105bb-0227-4c0c-b106-a0be5ae0f204,test@email.com) 1: BirthdateUpdated(1970-01-01) 2:
-      * AddressAdded(Address(United States,10001,1 Main str,None,Some(NY)))
+      * 0: UserCreated(904a8dd1-87c5-47f5-9f2a-5c3a403a4b68,test@email.com)
+      * 1: BirthdateUpdated(1970-01-01)
+      * 2: AddressAdded(Address(United States,10001,1 Main str,None,Some(NY)))
+      * 3: EmailUpdated(newemail@gmail.com)
       *
-      * UserRecord(c6e105bb-0227-4c0c-b106-a0be5ae0f204,test@email.com,Some(1970-01-01), Vector(Address(United
+      * UserRecord(904a8dd1-87c5-47f5-9f2a-5c3a403a4b68,newemail@gmail.com,Some(1970-01-01),Vector(Address(United
       * States,10001,1 Main str,None,Some(NY))))
       */
-    smallProgram.run(()).map { case (events, finalState, out) =>
+    program.run.map: (events, finalState, out) =>
       println(events.zipWithIndex.map(l => s"${l._2}: ${l._1}").mkString("\n"))
       println("\n")
       println(finalState)
-    }
