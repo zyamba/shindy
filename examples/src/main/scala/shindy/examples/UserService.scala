@@ -34,7 +34,7 @@ object UserService:
   case class AddressAdded(newAddress: Address) extends UserRecordChangeEvent
 
   // state machine
-  given EventHandler[UserRecord, UserRecordChangeEvent] = EventHandler:
+  implicit val eventHandler: EventHandler[UserRecord, UserRecordChangeEvent] = EventHandler {
     case (None, ev: UserCreated) => UserRecord(ev.id, ev.email)
 
     case (Some(s: UserRecord), ev: EmailUpdated) => s.copy(email = ev.newEmail)
@@ -42,16 +42,17 @@ object UserService:
     case (Some(u: UserRecord), BirthdateUpdated(newDate)) => u.copy(birthdate = Some(newDate))
 
     case (Some(u: UserRecord), AddressAdded(a)) => u.copy(addresses = u.addresses :+ a)
+  }
 
   // business logic
-  def createUser(id: UUID, email: String): SourcedCreation[UserRecord, UserCreated, UUID] =
+  def createUser(id: UUID, email: String): SourcedEval[Unit, UserRecord, UserCreated, UUID] =
     sourceNew[UserRecord](UserCreated(id, email).asRight).map(_ => id)
 
-  def updateEmail(email: String): SourcedUpdate[UserRecord, EmailUpdated, Unit] = source { (_: UserRecord) =>
+  def updateEmail(email: String): SourcedEval[UserRecord, UserRecord, EmailUpdated, Unit] = source { (_: UserRecord) =>
     Either.cond(email.contains("@"), EmailUpdated(email), "email is invalid")
   }
 
-  def changeBirthdate(birthdate: LocalDate): SourcedUpdate[UserRecord, BirthdateUpdated, Unit] = source {
+  def changeBirthdate(birthdate: LocalDate): SourcedEval[UserRecord, UserRecord, BirthdateUpdated, Unit] = source {
     (_: UserRecord) =>
       Either.cond(
         birthdate.isBefore(LocalDate.of(2018, 1, 1)),
@@ -66,18 +67,20 @@ object UserService:
       strLine1: String,
       strLine2: Option[String] = None,
       state: Option[String] = None
-  ): SourcedUpdate[UserRecord, AddressAdded, Unit] = source { _ =>
-    Either.cond(
-      country.nonEmpty && strLine1.nonEmpty && zip.nonEmpty,
-      AddressAdded(Address(country, zip, strLine1, strLine2, state)),
-      "Invalid address"
-    )
+  ): SourcedEval[UserRecord, UserRecord, AddressAdded, Unit] = {
+    source { _ =>
+      Either.cond(
+        country.nonEmpty && strLine1.nonEmpty && zip.nonEmpty,
+        AddressAdded(Address(country, zip, strLine1, strLine2, state)),
+        "Invalid address"
+      )
+    }
   }
 
   // composing multiple actions into single action
-  def createUser(email: String, birthDate: LocalDate): SourcedCreation[UserRecord, UserRecordChangeEvent, UUID] =
-    // Side effect that produces id is outside the `source` scope. Thus, it remains pure.
-    // In other words "id" value remain unchanged if source executed more than once (in case of a retry for example).
+  def createUser(email: String, birthDate: LocalDate): SourcedEval[Unit, UserRecord, UserRecordChangeEvent, UUID] =
+    // Side effect that produces id is outside of the `source` scope. Thus it remains pure.
+    // In other words "id" value remain unchanged if source executed more then once (in case of a retry for example).
     val id = UUID.randomUUID()
     createUser(id, email) andThen { id =>
       changeBirthdate(birthDate).map(_ => id)
@@ -97,7 +100,8 @@ object UserService:
       * UserRecord(c6e105bb-0227-4c0c-b106-a0be5ae0f204,test@email.com,Some(1970-01-01), Vector(Address(United
       * States,10001,1 Main str,None,Some(NY))))
       */
-    smallProgram.run.map: (events, finalState, out) =>
+    smallProgram.run(()).map { case (events, finalState, out) =>
       println(events.zipWithIndex.map(l => s"${l._2}: ${l._1}").mkString("\n"))
       println("\n")
       println(finalState)
+    }

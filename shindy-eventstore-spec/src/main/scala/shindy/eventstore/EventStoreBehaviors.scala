@@ -8,7 +8,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import shindy.examples.UserService.*
-import shindy.{EventSourced, SourcedCreation, SourcedUpdate}
+import shindy.{EventSourced, SourcedEval}
 
 import java.time.LocalDate
 import java.util.UUID
@@ -140,7 +140,7 @@ trait EventStoreBehaviors
     "report provided error message" taggedAs DatabaseTest in {
       val errorMessage = "test error"
 
-      val unconditionalErr: SourcedUpdate[UserRecord, Nothing, Nothing] =
+      val unconditionalErr: SourcedEval[UserRecord, UserRecord, Nothing, Nothing] =
         EventSourced.sourceError(errorMessage)
 
       val sourceError =
@@ -160,7 +160,7 @@ trait EventStoreBehaviors
     }
 
     "not trigger snapshot if snapshot interval not exceeded" taggedAs DatabaseTest in {
-      val initial: SourcedCreation[UserRecord, UserRecordChangeEvent, UUID] =
+      val initial: SourcedEval[Unit, UserRecord, UserRecordChangeEvent, UUID] =
         createUser(UUID.randomUUID(), "foo@bar.com")
       val allOps = (1 until (snapshotIntervalValue - 1)).foldLeft(
         createNew[IO](initial).map(_ => ())
@@ -184,7 +184,7 @@ trait EventStoreBehaviors
       val initial = createUser(UUID.randomUUID(), "foo@bar.com")
 
       val allOps = (1 until snapshotIntervalValue)
-        .foldLeft(SourcedUpdate.pure[UserRecord, UserRecordChangeEvent](())) { (sc, n) =>
+        .foldLeft(SourcedEval.pure[UserRecord, UserRecordChangeEvent](())) { (sc, n) =>
           sc andThen updateEmail(s"updated_$n@test.com").map(_ => ())
         }
 

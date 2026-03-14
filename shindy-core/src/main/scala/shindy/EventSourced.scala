@@ -1,7 +1,6 @@
 package shindy
 
-import cats.Eval
-import cats.data.ReaderWriterStateT
+import cats.data.{IndexedReaderWriterStateT, ReaderWriterStateT}
 import cats.instances.either.*
 import cats.syntax.option.*
 
@@ -22,14 +21,15 @@ object EventSourced:
 
   /** Builds SourcedCreation from `Either[String, EVENT]`
     */
-  def sourceNew[STATE] = new SourceNewPartiallyApplied[STATE]()
+  def sourceNew[STATE] = new sourceNewPartiallyApplied[STATE]()
 
-  /** Produces new SourcedCreation without logging any events.
+  /** Produces new SourcedEval initialized using the given state
     */
-  private[shindy] def sourceState[STATE, EVENT](block: => Either[String, STATE]): SourcedCreation[STATE, EVENT, Unit] =
-    SourcedCreation(block, SourcedUpdate.pure(()))
+  private[shindy] def sourceState[STATE, EVENT](
+      block: => Either[String, STATE]
+  ): SourcedEval[Unit, STATE, EVENT, Unit] = SourcedEval.pure(()).modifyS(_ => block)
 
-  /** Builds SourcedUpdate from `STATE => Either[String, EVENT]`
+  /** Builds SourcedEval from `STATE => Either[String, EVENT]`
     * @param block
     *   Block of code that maybe produces an Event
     * @param eventHandler
@@ -39,19 +39,19 @@ object EventSourced:
     * @tparam EVENT
     *   Event type
     * @return
-    *   SourcedUpdate[STATE, EVENT, Unit] from given block.
+    *   SourcedEval[STATE, EVENT, Unit] from given block.
     */
   def source[STATE, EVENT](block: STATE => Either[String, EVENT])(using
       eventHandler: EventHandler[STATE, EVENT]
-  ): SourcedUpdate[STATE, EVENT, Unit] = sourceOut(block(_).map((_, ())))
+  ): SourcedEval[STATE, STATE, EVENT, Unit] = sourceOut(block(_).map((_, ())))
 
-  /** Builds SourcedUpdate that always reports error
+  /** Builds SourcedEval that always reports error
     *
     * @param msg
     *   Error message
     */
-  def sourceError[STATE, EVENT](msg: String): SourcedUpdate[STATE, EVENT, Nothing] =
-    SourcedUpdate {
+  def sourceError[STATE, EVENT](msg: String): SourcedEval[STATE, STATE, EVENT, Nothing] =
+    SourcedEval {
       ReaderWriterStateT[MaybeError, Unit, Vector[EVENT], STATE, Nothing]((_, _) => Left(msg))
     }
 
@@ -60,7 +60,7 @@ object EventSourced:
     */
   def sourceOut[STATE, EVENT, Out](block: STATE => Either[String, (EVENT, Out)])(using
       eventHandler: EventHandler[STATE, EVENT]
-  ): SourcedUpdate[STATE, EVENT, Out] = sourceOutExt(block(_).map { case (ev, out) =>
+  ): SourcedEval[STATE, STATE, EVENT, Out] = sourceOutExt(block(_).map { case (ev, out) =>
     (Vector(ev), out)
   })
 
@@ -68,7 +68,7 @@ object EventSourced:
     */
   def sourceOutExt[STATE, EVENT, Out](block: STATE => Either[String, (Vector[EVENT], Out)])(using
       eventHandler: EventHandler[STATE, EVENT]
-  ): SourcedUpdate[STATE, EVENT, Out] = SourcedUpdate(sourceInt(block))
+  ): SourcedEval[STATE, STATE, EVENT, Out] = SourcedEval(sourceInternal(block))
 
   /** Conditionally execute update operation.
     *
@@ -79,11 +79,11 @@ object EventSourced:
     */
   def when[STATE, S <: STATE: ClassTag, EVENT, B](
       predicate: S => Boolean,
-      sourcedUpdate: SourcedUpdate[STATE, EVENT, B]
-  ): SourcedUpdate[STATE, EVENT, Option[B]] =
-    val condUpdate: S => SourcedUpdate[STATE, EVENT, Option[B]] = {
+      sourcedUpdate: SourcedEval[STATE, STATE, EVENT, B]
+  ): SourcedEval[STATE, STATE, EVENT, Option[B]] =
+    val condUpdate: S => SourcedEval[STATE, STATE, EVENT, Option[B]] = {
       case s: S if predicate(s) => sourcedUpdate.map(_.some)
-      case _                    => SourcedUpdate.pure(None)
+      case _                    => SourcedEval.pure(None)
     }
     whenStateIs(condUpdate).map(_.flatten)
 
@@ -95,9 +95,9 @@ object EventSourced:
     *   Expected state of the state machine
     */
   def whenStateIs[STATE, S <: STATE: ClassTag, EVENT, B](
-      upd: S => SourcedUpdate[STATE, EVENT, B]
-  ): SourcedUpdate[STATE, EVENT, Option[B]] =
-    val nop: SourcedUpdate[STATE, EVENT, Option[B]] = SourcedUpdate.pure(None)
+      upd: S => SourcedEval[STATE, STATE, EVENT, B]
+  ): SourcedEval[STATE, STATE, EVENT, Option[B]] =
+    val nop: SourcedEval[STATE, STATE, EVENT, Option[B]] = SourcedEval.pure(None)
     nop.get.flatMap {
       case s: S => upd(s).map(Option.apply)
       case _    => nop
@@ -105,27 +105,28 @@ object EventSourced:
 
   /** Builder that helps scala compiler infer event type
     */
-  class SourceNewPartiallyApplied[STATE]:
+  class sourceNewPartiallyApplied[STATE]:
     def apply[EVENT](block: => Either[String, EVENT])(using
         eventHandler: EventHandler[STATE, EVENT]
-    ): SourcedCreation[STATE, EVENT, Unit] =
-      val eventEval = Eval.later(block)
-      val stateEval = eventEval.map(_.map(eventHandler(Option.empty[STATE], _)))
-      val pureNop = SourcedUpdate.pure[STATE, EVENT](())
-      // sourceUpdate is not just pure value, but it has to hold creation event
-      // since the state was originated from an event
-      val sourceUpdate = pureNop.flatMap[Unit]: _ =>
-        eventEval.value match
-          case Left(msg) => sourceError(msg)
-          case Right(ev) => pureNop.tell(ev)
-      SourcedCreation(stateEval.value, sourceUpdate)
+    ): SourcedEval[Unit, STATE, EVENT, Unit] = SourcedEval(sourceNewInternal(block))
 
-  /** Convert given block to ReaderWriterStateT that can be used by `SourcedUpdate`
+  /** Convert given block to ReaderWriterStateT that can be used by `SourcedEval`
     */
-  private def sourceInt[Out, EVENT, STATE](block: STATE => Either[String, (Vector[EVENT], Out)])(using
+  private def sourceInternal[Out, EVENT, STATE](block: STATE => Either[String, (Vector[EVENT], Out)])(using
       eventHandler: EventHandler[STATE, EVENT]
   ): ReaderWriterStateT[MaybeError, Unit, Vector[EVENT], STATE, Out] = ReaderWriterStateT: (_, startState) =>
-    block(startState).map: (events, out) =>
-      val finalState = events.foldLeft(startState):
-        (state, event) => eventHandler(Some(state), event)
-      (events, finalState, out)
+    block(startState)
+      .map: (events, out) =>
+        val finalState = events.foldLeft(startState): (state, event) =>
+          eventHandler(Some(state), event)
+        (events, finalState, out)
+
+  /** Convert given block to ReaderWriterStateT that can be used by `SourcedEval`
+    */
+  private def sourceNewInternal[EVENT, STATE](block: => Either[String, EVENT])(using
+      eventHandler: EventHandler[STATE, EVENT]
+  ): IndexedReaderWriterStateT[MaybeError, Unit, Vector[EVENT], Unit, STATE, Unit] =
+    IndexedReaderWriterStateT: (_, _) =>
+      block.map: event =>
+        val initialState = eventHandler(Option.empty[STATE], event)
+        (Vector(event), initialState, ())

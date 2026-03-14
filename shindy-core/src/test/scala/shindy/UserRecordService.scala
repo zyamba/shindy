@@ -13,7 +13,7 @@ object UserRecordService:
 
   sealed case class UserRecordActive(id: UUID, email: String, birthdate: Option[LocalDate] = None) extends UserRecord
 
-  sealed case class UserRecordInactive(suspended: UserRecordActive) extends UserRecord
+  sealed case class UserRecordInactive(suspendedState: UserRecordActive) extends UserRecord
 
   // events
   sealed trait UserRecordChangeEvent extends Product with Serializable
@@ -36,14 +36,14 @@ object UserRecordService:
   }
 
   // business logic
-  def createUser(id: UUID, email: String): SourcedCreation[UserRecord, UserCreated, UUID] =
+  def createUser(id: UUID, email: String): SourcedEval[Unit, UserRecord, UserCreated, UUID] =
     sourceNew[UserRecord](UserCreated(id, email).asRight).map(_ => id)
 
-  def updateEmail(email: String): SourcedUpdate[UserRecord, EmailUpdated, Unit] = source { (_: UserRecord) =>
+  def updateEmail(email: String): SourcedEval[UserRecord, UserRecord, EmailUpdated, Unit] = source { (_: UserRecord) =>
     Either.cond(email.contains("@"), EmailUpdated(email), "email is invalid")
   }
 
-  def changeBirthdate(datetime: LocalDate): SourcedUpdate[UserRecord, BirthdateUpdated, Unit] = source {
+  def changeBirthdate(datetime: LocalDate): SourcedEval[UserRecord, UserRecord, BirthdateUpdated, Unit] = source {
     (_: UserRecord) =>
       Either.cond(
         datetime.isBefore(LocalDate.of(2018, 1, 1)),
@@ -52,4 +52,4 @@ object UserRecordService:
       )
   }
 
-  def suspend(): SourcedUpdate[UserRecord, Suspended, Unit] = source(_ => Suspended().asRight)
+  def suspend(): SourcedEval[UserRecord, UserRecord, Suspended, Unit] = source(_ => Suspended().asRight)

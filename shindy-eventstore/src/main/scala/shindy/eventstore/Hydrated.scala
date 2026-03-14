@@ -1,7 +1,7 @@
 package shindy.eventstore
 
 import cats.data.ReaderT
-import shindy.SourcedUpdate
+import shindy.SourcedEval
 
 import java.util.UUID
 
@@ -18,14 +18,14 @@ trait Hydrated[STATE, EVENT, A, F[_]]:
 
   def map[B](f: A => B): Hydrated[STATE, EVENT, B, F]
 
-  def update[B](f: A => SourcedUpdate[STATE, EVENT, B]): Hydrated[STATE, EVENT, B, F]
+  def update[B](f: A => SourcedEval[STATE, STATE, EVENT, B]): Hydrated[STATE, EVENT, B, F]
 
-  final def update[B](su: SourcedUpdate[STATE, EVENT, B]): Hydrated[STATE, EVENT, B, F] =
+  final def update[B](su: SourcedEval[STATE, STATE, EVENT, B]): Hydrated[STATE, EVENT, B, F] =
     update(_ => su)
 
   def persist(): ReaderT[F, EventStore[EVENT, STATE, F], (UUID, STATE, A)]
 
-  /** Simply computes the current state from the events and any [[shindy.SourcedUpdate]] added using ''update'' method.
+  /** Simply computes the current state from the events and any [[shindy.SourcedEval]] added using ''update'' method.
     * Not very useful except for using in tests or for debugging.
     */
   def state(): ReaderT[F, EventStore[EVENT, STATE, F], STATE]

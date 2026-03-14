@@ -5,21 +5,21 @@ import cats.data.ReaderT
 import cats.effect.{MonadCancel, MonadCancelThrow}
 import cats.syntax.all.*
 import shindy.EventSourced.EventHandler
-import shindy.{EventSourced, SourcedCreation, SourcedUpdate}
+import shindy.{EventSourced, SourcedEval}
 
 import java.util.UUID
 
 private[shindy] object HydratedImpl:
 
   def createNew[STATE, EVENT, F[_]: MonadCancelThrow](
-      sc: SourcedCreation[STATE, EVENT, UUID],
+      sc: SourcedEval[Unit, STATE, EVENT, UUID],
       snapshotInterval: Option[Int] = None
   )(using
       eventHandler: EventHandler[STATE, EVENT]
   ): Hydrated[STATE, EVENT, Unit, F] =
     new HydratedImpl(
       ReaderT.pure(sc.map(id => (id, 0, 0))),
-      SourcedUpdate.pure(()),
+      SourcedEval.pure(()),
       snapshotInterval
     )
 
@@ -50,17 +50,18 @@ private[shindy] object HydratedImpl:
               )
               .map(_ => (aggregateId, snapshotVer.getOrElse(0), ver))
           }
-          value.compile.toList.map { x =>
+          val ll = value.compile.toList.map { x =>
             Either.fromOption(x.headOption, new Exception("No such aggregate"))
           }.rethrow
+          ll
         }
     },
-    SourcedUpdate.pure(()),
+    SourcedEval.pure(()),
     snapshotInterval
   )
 
 /** @param scLoad
-  *   Loads SourcedCreation which returns tuple of aggregateID, snapshot version and latest event version
+  *   Loads SourcedEval which returns tuple of aggregateID, snapshot version and latest event version
   * @param sourcedUpdate
   *   SourcedUpdate to be applied to loaded state. Only events produced by this object are logged and will be persisted
   *   when persist method is called.
@@ -74,8 +75,8 @@ private[shindy] object HydratedImpl:
   *   Output value type
   */
 private class HydratedImpl[STATE, EVENT, A, F[_]: MonadCancelThrow](
-    scLoad: ReaderT[F, EventStore[EVENT, STATE, F], SourcedCreation[STATE, EVENT, (UUID, Int, Int)]],
-    sourcedUpdate: SourcedUpdate[STATE, EVENT, A],
+    scLoad: ReaderT[F, EventStore[EVENT, STATE, F], SourcedEval[Unit, STATE, EVENT, (UUID, Int, Int)]],
+    sourcedUpdate: SourcedEval[STATE, STATE, EVENT, A],
     snapshotInterval: Option[Int]
 ) extends Hydrated[STATE, EVENT, A, F]:
   override def map[B](f: A => B): Hydrated[STATE, EVENT, B, F] =
@@ -83,10 +84,10 @@ private class HydratedImpl[STATE, EVENT, A, F[_]: MonadCancelThrow](
 
   override def state(): ReaderT[F, EventStore[EVENT, STATE, F], STATE] = scLoad
     .map(_.andThen(sourcedUpdate))
-    .map(_.state.leftMap(new Exception(_)))
+    .map(_.state(()).leftMap(new Exception(_)))
     .flatMapF(MonadCancel[F].pure(_).rethrow)
 
-  override def update[B](f: A => SourcedUpdate[STATE, EVENT, B]): Hydrated[STATE, EVENT, B, F] =
+  override def update[B](f: A => SourcedEval[STATE, STATE, EVENT, B]): Hydrated[STATE, EVENT, B, F] =
     new HydratedImpl(scLoad, sourcedUpdate.andThen(f), snapshotInterval)
 
   private val noopF: F[Unit] = Monad[F].pure(())
@@ -97,7 +98,7 @@ private class HydratedImpl[STATE, EVENT, A, F[_]: MonadCancelThrow](
         .andThen { idAndVer =>
           sourcedUpdate.map(a => (idAndVer._1, idAndVer._2, idAndVer._3, a))
         }
-        .run
+        .run(())
         .leftMap(new Exception(_))
         .map { case (newEvents, newState, (aggId, snapshotVersion, initialVersion, aOut)) =>
           val versionedEvents: Vector[VersionedEvent[EVENT]] = newEvents
