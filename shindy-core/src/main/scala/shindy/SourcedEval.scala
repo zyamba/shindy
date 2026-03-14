@@ -109,6 +109,3 @@ case class SourcedEval[SA, S, +E, +A](
           block(s).map(sb => (Vector.empty, sb, a))
       )
     )
-
-  private[shindy] def tell[EB >: E](event: EB): SourcedEval[SA, S, EB, A] =
-    SourcedEval(this.widen[EB].readerWriterState.tell(Vector(event)))
