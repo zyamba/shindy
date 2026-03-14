@@ -20,11 +20,11 @@ trait Hydration[STATE, EVENT]:
     */
   protected def stateSnapshotInterval: Option[Int] = None
 
-  def createNew[F[_]: MonadCancelThrow](sourcedCreation: SourcedEval[Unit, STATE, EVENT, UUID])(implicit
+  def createNew[F[_]: MonadCancelThrow](sourcedCreation: SourcedEval[Unit, STATE, EVENT, UUID])(using
       eventHandler: EventHandler[STATE, EVENT]
   ): Hydrated[STATE, EVENT, Unit, F] = HydratedImpl.createNew(sourcedCreation, stateSnapshotInterval)
 
-  def hydrate[F[_]: MonadCancelThrow](aggregateId: UUID)(implicit
+  def hydrate[F[_]: MonadCancelThrow](aggregateId: UUID)(using
       eventHandler: EventHandler[STATE, EVENT],
       compiler: fs2.Compiler[F, F]
   ): Hydrated[STATE, EVENT, Unit, F] = HydratedImpl.hydrate(aggregateId, stateSnapshotInterval)

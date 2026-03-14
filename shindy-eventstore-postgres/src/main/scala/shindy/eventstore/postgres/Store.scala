@@ -11,7 +11,7 @@ import doobie.util.{Read, fragment, update}
 import io.circe.Decoder.Result
 import io.circe.syntax.*
 import io.circe.{Decoder, Encoder, Json}
-import shindy.eventstore.postgres.JsonSupport.*
+import shindy.eventstore.postgres.JsonSupport.given
 import shindy.eventstore.{EventStore, VersionedEvent}
 
 import java.util.UUID
@@ -35,7 +35,7 @@ object Store:
   private[postgres] def insertState(aggregateId: UUID, version: Int, stateSnapshot: Json): doobie.Update0 =
     sql"""
          insert into state_snapshot (aggregate_id, aggregate_version, state_snapshot,create_time)
-         values ($aggregateId,$version,$stateSnapshot,now())
+         values ($aggregateId,$version,$stateSnapshot, now())
          on conflict (aggregate_id)
          do update set state_snapshot = $stateSnapshot, aggregate_version = $version, create_time = now()
       """.update
