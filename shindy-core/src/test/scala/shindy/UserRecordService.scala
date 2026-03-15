@@ -13,7 +13,7 @@ object UserRecordService:
 
   sealed case class UserRecordActive(id: UUID, email: String, birthdate: Option[LocalDate] = None) extends UserRecord
 
-  sealed case class UserRecordInactive(suspended: UserRecordActive) extends UserRecord
+  sealed case class UserRecordInactive(suspendedState: UserRecordActive) extends UserRecord
 
   // events
   sealed trait UserRecordChangeEvent extends Product with Serializable
@@ -28,28 +28,28 @@ object UserRecordService:
 
   // state machine
   given eventHandler: EventHandler[UserRecord, UserRecordChangeEvent] = EventHandler {
-    case (None, ev: UserCreated) => UserRecordActive(ev.id, ev.email)
+    case (null, ev: UserCreated) => UserRecordActive(ev.id, ev.email)
 
-    case (Some(s: UserRecordActive), ev: EmailUpdated) => s.copy(email = ev.newEmail)
+    case (s: UserRecordActive, ev: EmailUpdated) => s.copy(email = ev.newEmail)
 
-    case (Some(u: UserRecordActive), BirthdateUpdated(newDate)) => u.copy(birthdate = Some(newDate))
+    case (u: UserRecordActive, BirthdateUpdated(newDate)) => u.copy(birthdate = Some(newDate))
   }
 
-  // business logic
-  def createUser(id: UUID, email: String): SourcedCreation[UserRecord, UserCreated, UUID] =
-    sourceNew[UserRecord](UserCreated(id, email).asRight).map(_ => id)
+  object UserAggregate extends EventSourced[UserRecord, UserRecordChangeEvent]:
+    // business logic
+    def create(id: UUID, email: String) =
+      sourceNew(UserCreated(id, email).asRight).map(_ => id)
 
-  def updateEmail(email: String): SourcedUpdate[UserRecord, EmailUpdated, Unit] = source { (_: UserRecord) =>
-    Either.cond(email.contains("@"), EmailUpdated(email), "email is invalid")
-  }
+    def updateEmail(email: String) = source { (_: UserRecord) =>
+      Either.cond(email.contains("@"), EmailUpdated(email), "email is invalid")
+    }
 
-  def changeBirthdate(datetime: LocalDate): SourcedUpdate[UserRecord, BirthdateUpdated, Unit] = source {
-    (_: UserRecord) =>
+    def changeBirthdate(datetime: LocalDate) = source { (_: UserRecord) =>
       Either.cond(
         datetime.isBefore(LocalDate.of(2018, 1, 1)),
         BirthdateUpdated(datetime),
         "Too young!"
       )
-  }
+    }
 
-  def suspend(): SourcedUpdate[UserRecord, Suspended, Unit] = source(_ => Suspended().asRight)
+    def suspend = source(_ => Suspended().asRight)

@@ -1,3 +1,3 @@
 package shindy.eventstore
 
-case class VersionedEvent[+EVENT](event: EVENT, version: Int)
+case class VersionedEvent[+E](event: E, version: Int)

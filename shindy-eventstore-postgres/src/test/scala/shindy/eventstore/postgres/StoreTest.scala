@@ -19,7 +19,7 @@ import org.scalatest.freespec.AsyncFreeSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import pureconfig.*
-import shindy.eventstore.postgres.JsonSupport.*
+import shindy.eventstore.postgres.JsonSupport.given
 import shindy.eventstore.postgres.StoreTest.DatabaseConfig
 import shindy.eventstore.{DatabaseTest, EventStoreBehaviors, Hydration}
 import shindy.examples.UserService.*

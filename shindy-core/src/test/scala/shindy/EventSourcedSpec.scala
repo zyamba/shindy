@@ -1,15 +1,13 @@
 package shindy
 
-import java.time.LocalDate
-import java.util.UUID
-
-import cats.syntax.either.*
 import cats.syntax.option.*
+import org.scalatest.Inside
 import org.scalatest.freespec.AnyFreeSpec
 import org.scalatest.matchers.should.Matchers
-import org.scalatest.Inside
-import shindy.EventSourced.{EventHandler, source, sourceNew}
+import shindy.EventSourced.sourceNew
 
+import java.time.LocalDate
+import java.util.UUID
 import scala.language.{postfixOps, reflectiveCalls}
 
 class EventSourcedSpec extends AnyFreeSpec with Matchers with Inside:
@@ -22,7 +20,7 @@ class EventSourcedSpec extends AnyFreeSpec with Matchers with Inside:
     "should be able to capture creation event" in {
       val email = "test@yahoo.com"
       val userId = UUID.randomUUID()
-      val results = createUser(userId, email) run
+      val results = UserAggregate.create(userId, email) run
 
       results.isRight shouldBe true
       inside(results) { case Right((events, state, _)) =>
@@ -36,7 +34,7 @@ class EventSourcedSpec extends AnyFreeSpec with Matchers with Inside:
     "should be able to get latest state by calling 'get'" in {
       val email = "test@yahoo.com"
       val userId = UUID.randomUUID()
-      val result = createUser(userId, email).get.run
+      val result = UserAggregate.create(userId, email).get.run
       result.isRight shouldBe true
       inside(result) { case Right((_, state, stateOut)) =>
         state shouldEqual stateOut
@@ -46,7 +44,8 @@ class EventSourcedSpec extends AnyFreeSpec with Matchers with Inside:
 
     "should be able to execute update of the given state" in {
       val updEmail = "new@yahoo.com"
-      val results = updateEmail(updEmail) run UserRecordActive(UUID.randomUUID(), "original@google.com", None)
+      val results =
+        UserAggregate.updateEmail(updEmail) run UserRecordActive(UUID.randomUUID(), "original@google.com", None)
       results.isRight shouldBe true
 
       inside(results) { case Right((events, state, _)) =>
@@ -60,7 +59,8 @@ class EventSourcedSpec extends AnyFreeSpec with Matchers with Inside:
     "should report domain errors" in {
       val email = "test@yahoo.com"
       val userId = UUID.randomUUID()
-      val results = createUser(userId, email) andThen changeBirthdate(LocalDate.of(2018, 12, 12)) run
+      val results =
+        UserAggregate.create(userId, email) andThen UserAggregate.changeBirthdate(LocalDate.of(2018, 12, 12)) run
 
       results.isLeft shouldBe true
       results.left.getOrElse("") should include("Too young")
@@ -72,7 +72,7 @@ class EventSourcedSpec extends AnyFreeSpec with Matchers with Inside:
       val conditionalUpdate =
         when(
           (user: UserRecordActive) => user.birthdate.isDefined,
-          updateEmail(happyBirthdayEmail).map(_ => happyBirthdayMsg)
+          UserAggregate.updateEmail(happyBirthdayEmail).map(_ => happyBirthdayMsg)
         )
 
       val stateDoesNotMatchCond = UserRecordActive(UUID.randomUUID(), "test@test.com")
@@ -107,7 +107,7 @@ class EventSourcedSpec extends AnyFreeSpec with Matchers with Inside:
 
       val output = "Success"
       val updatedEmail = "updated@test.com"
-      val condOp = whenStateIs((_: UserRecordActive) => updateEmail(updatedEmail).map(_ => output))
+      val condOp = whenStateIs((_: UserRecordActive) => UserAggregate.updateEmail(updatedEmail).map(_ => output))
 
       val runTrue = condOp.run(activeUser)
       runTrue.isRight shouldBe true
@@ -124,13 +124,14 @@ class EventSourcedSpec extends AnyFreeSpec with Matchers with Inside:
       val inactiveUser = UserRecordInactive(UserRecordActive(UUID.randomUUID(), "test@test.com"))
 
       val updatedEmail = "updated@test.com"
-      val condOp = whenStateIs((_: UserRecordActive) => updateEmail(updatedEmail).map(_ => "should not happen"))
+      val condOp =
+        whenStateIs((_: UserRecordActive) => UserAggregate.updateEmail(updatedEmail).map(_ => "should not happen"))
 
       val runFalse = condOp.run(inactiveUser)
       runFalse.isRight shouldBe true
       inside(runFalse) { case Right((ev, u, out)) =>
-        ev should be(Symbol("empty"))
-        u.asInstanceOf[UserRecordInactive].suspended.email should not equal updatedEmail
+        ev.isEmpty shouldBe true
+        u.asInstanceOf[UserRecordInactive].suspendedState.email should not equal updatedEmail
         out shouldEqual None
       }
     }
@@ -143,10 +144,10 @@ class EventSourcedSpec extends AnyFreeSpec with Matchers with Inside:
       val birthdate = LocalDate.of(2000, 1, 1)
 
       val createAndModifyUser =
-        createUser(userId, regEmail) andThen { _ =>
-          updateEmail(updEmail)
+        UserAggregate.create(userId, regEmail) andThen { _ =>
+          UserAggregate.updateEmail(updEmail)
         } andThen { _ =>
-          changeBirthdate(birthdate)
+          UserAggregate.changeBirthdate(birthdate)
         }
 
       val results = createAndModifyUser.run
@@ -169,11 +170,11 @@ class EventSourcedSpec extends AnyFreeSpec with Matchers with Inside:
 
       val modifyUser =
         for
-          s1 <- updateEmail(updEmail).map(_ => "Hello, ").widen[UserRecordChangeEvent]
-          s2 <- changeBirthdate(birthdate).map(_ => "world")
+          s1 <- UserAggregate.updateEmail(updEmail).map(_ => "Hello, ")
+          s2 <- UserAggregate.changeBirthdate(birthdate).map(_ => "world")
         yield s1 + s2
 
-      val results = (createUser(userId, regEmail) andThen modifyUser) run
+      val results = (UserAggregate.create(userId, regEmail) andThen modifyUser) run
 
       results.isRight shouldBe true
       inside(results) { case Right((events, finalState, msg)) =>
@@ -189,7 +190,7 @@ class EventSourcedSpec extends AnyFreeSpec with Matchers with Inside:
 
     "should fail if the sourceNew block fails" in {
       val errMessage = "Error creating UserRecord"
-      val errSourced = sourceNew[UserRecord](Left(errMessage)) andThen updateEmail("wrong-email")
+      val errSourced = sourceNew[UserRecord](Left(errMessage)) andThen UserAggregate.updateEmail("wrong-email")
 
       val runResult = errSourced.run
       runResult.isLeft shouldBe true
@@ -198,8 +199,8 @@ class EventSourcedSpec extends AnyFreeSpec with Matchers with Inside:
 
     "should fail if error is sourced" in {
       val errMessage = "Error sourced"
-      val errSourced: SourcedUpdate[UserRecord, UserRecordChangeEvent, Option[Unit]] = whenStateIs {
-        (_: UserRecordActive) => sourceError(errMessage)
+      val errSourced = whenStateIs { (_: UserRecordActive) =>
+        sourceError(errMessage)
       }
 
       val userRecordState = UserRecordActive(UUID.randomUUID(), "test@test.com")
@@ -209,8 +210,8 @@ class EventSourcedSpec extends AnyFreeSpec with Matchers with Inside:
     }
 
     "should be able to inspect state" in {
-      val inspectEmail: SourcedUpdate[UserRecord, UserRecordChangeEvent, Option[String]] =
-        SourcedUpdate.pure(()).inspect {
+      val inspectEmail =
+        SourcedEval.pure(()).inspect {
           case e: UserRecordActive => Some(e.email)
           case _                   => None
         }
@@ -224,13 +225,14 @@ class EventSourcedSpec extends AnyFreeSpec with Matchers with Inside:
     }
 
     "should be able to collect events from SourcedCreate and SourcedUpdate" in {
-      val sourcedCreate = createUser(UUID.randomUUID(), "test1@test.com")
-      val sourcedUpdate = updateEmail("test2@test.com")
-        .andThen(updateEmail("test3@test.com"))
-        .andThen(changeBirthdate(LocalDate.of(2000, 1, 2)))
+      val sourcedCreate = UserAggregate.create(UUID.randomUUID(), "test1@test.com")
+      val sourcedUpdate = UserAggregate
+        .updateEmail("test2@test.com")
+        .andThen(UserAggregate.updateEmail("test3@test.com"))
+        .andThen(UserAggregate.changeBirthdate(LocalDate.of(2000, 1, 2)))
       val program = sourcedCreate andThen sourcedUpdate
 
-      val eventsEither = program.events
+      val eventsEither = program.events(null)
       eventsEither.isRight shouldBe true
       inside(eventsEither) { case Right(events) =>
         events should have size
@@ -251,7 +253,7 @@ class EventSourcedSpec extends AnyFreeSpec with Matchers with Inside:
       import UserRecordService.*
 
       val userRecordState = UserRecordActive(UUID.randomUUID(), "test@test.com")
-      val exception = the[RuntimeException] thrownBy suspend().run(userRecordState)
+      val exception = the[RuntimeException] thrownBy UserAggregate.suspend.run(userRecordState)
 
       exception.getMessage should (
         include("Unhandled event")

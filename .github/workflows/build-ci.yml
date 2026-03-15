@@ -41,7 +41,7 @@ jobs:
         env:
           PG_PASSWORD: essecret
         run: |
-          sbt clean coverage test db:test coverageReport coverageAggregate
+          sbt clean coverage compile test Db/test coverageReport coverageAggregate
       - name: "Upload coverage to Codecov"
         uses: "codecov/codecov-action@v5"
         with:

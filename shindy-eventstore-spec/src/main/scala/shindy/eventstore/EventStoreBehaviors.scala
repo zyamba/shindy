@@ -2,17 +2,16 @@ package shindy.eventstore
 
 import cats.effect.*
 import cats.effect.testing.scalatest.AsyncIOSpec
-import org.scalatest.{AsyncTestSuite, Tag}
-import org.scalatest.freespec.{AnyFreeSpec, AsyncFreeSpec}
-import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.freespec.AsyncFreeSpec
 import org.scalatest.matchers.should.Matchers
+import org.scalatest.{AsyncTestSuite, Tag}
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
 import shindy.examples.UserService.*
-import shindy.{EventSourced, SourcedCreation, SourcedUpdate}
+import shindy.examples.UserService.UserAggregate.*
+import shindy.{EventSourced, SourcedEval}
 
 import java.time.LocalDate
 import java.util.UUID
-import scala.Function.tupled
 import scala.language.reflectiveCalls
 
 object DatabaseTest extends Tag("DatabaseTest")
@@ -140,7 +139,7 @@ trait EventStoreBehaviors
     "report provided error message" taggedAs DatabaseTest in {
       val errorMessage = "test error"
 
-      val unconditionalErr: SourcedUpdate[UserRecord, Nothing, Nothing] =
+      val unconditionalErr: SourcedEval[UserRecord, UserRecord, Nothing, Nothing] =
         EventSourced.sourceError(errorMessage)
 
       val sourceError =
@@ -160,7 +159,7 @@ trait EventStoreBehaviors
     }
 
     "not trigger snapshot if snapshot interval not exceeded" taggedAs DatabaseTest in {
-      val initial: SourcedCreation[UserRecord, UserRecordChangeEvent, UUID] =
+      val initial: SourcedEval[Null, UserRecord, UserRecordChangeEvent, UUID] =
         createUser(UUID.randomUUID(), "foo@bar.com")
       val allOps = (1 until (snapshotIntervalValue - 1)).foldLeft(
         createNew[IO](initial).map(_ => ())
@@ -184,7 +183,7 @@ trait EventStoreBehaviors
       val initial = createUser(UUID.randomUUID(), "foo@bar.com")
 
       val allOps = (1 until snapshotIntervalValue)
-        .foldLeft(SourcedUpdate.pure[UserRecord, UserRecordChangeEvent](())) { (sc, n) =>
+        .foldLeft(SourcedEval.pure[UserRecord, UserRecordChangeEvent](())) { (sc, n) =>
           sc andThen updateEmail(s"updated_$n@test.com").map(_ => ())
         }
 

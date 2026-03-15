@@ -4,11 +4,11 @@ import fs2.Stream
 
 import java.util.UUID
 
-trait EventStore[EVENT, STATE, F[_]]:
+trait EventStore[E, S, F[_]]:
 
-  def loadEvents(aggregateId: UUID, fromVersion: Option[Int] = None): Stream[F, VersionedEvent[EVENT]]
+  def loadEvents(aggregateId: UUID, fromVersion: Option[Int] = None): Stream[F, VersionedEvent[E]]
 
-  def storeEvents(aggregateId: UUID, event: Vector[VersionedEvent[EVENT]]): F[Unit]
+  def storeEvents(aggregateId: UUID, event: Vector[VersionedEvent[E]]): F[Unit]
 
   /** Loads latest snapshot from event store. If the event store supports snapshoting it will return latest snapshot
     * available and its version.
@@ -18,6 +18,6 @@ trait EventStore[EVENT, STATE, F[_]]:
     * @return
     *   latest state snapshot and its version for given aggregate.
     */
-  def loadLatestStateSnapshot(aggregateId: UUID): F[Option[(STATE, Int)]]
+  def loadLatestStateSnapshot(aggregateId: UUID): F[Option[(S, Int)]]
 
-  def storeSnapshot(aggregateId: UUID, state: STATE, version: Int): F[Int]
+  def storeSnapshot(aggregateId: UUID, state: S, version: Int): F[Int]
