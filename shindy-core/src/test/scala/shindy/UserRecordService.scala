@@ -28,11 +28,11 @@ object UserRecordService:
 
   // state machine
   given eventHandler: EventHandler[UserRecord, UserRecordChangeEvent] = EventHandler {
-    case (None, ev: UserCreated) => UserRecordActive(ev.id, ev.email)
+    case (null, ev: UserCreated) => UserRecordActive(ev.id, ev.email)
 
-    case (Some(s: UserRecordActive), ev: EmailUpdated) => s.copy(email = ev.newEmail)
+    case (s: UserRecordActive, ev: EmailUpdated) => s.copy(email = ev.newEmail)
 
-    case (Some(u: UserRecordActive), BirthdateUpdated(newDate)) => u.copy(birthdate = Some(newDate))
+    case (u: UserRecordActive, BirthdateUpdated(newDate)) => u.copy(birthdate = Some(newDate))
   }
 
   object UserAggregate extends EventSourced[UserRecord, UserRecordChangeEvent]:

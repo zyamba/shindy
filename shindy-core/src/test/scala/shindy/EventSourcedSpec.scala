@@ -232,7 +232,7 @@ class EventSourcedSpec extends AnyFreeSpec with Matchers with Inside:
         .andThen(UserAggregate.changeBirthdate(LocalDate.of(2000, 1, 2)))
       val program = sourcedCreate andThen sourcedUpdate
 
-      val eventsEither = program.events(())
+      val eventsEither = program.events(null)
       eventsEither.isRight shouldBe true
       inside(eventsEither) { case Right(events) =>
         events should have size

@@ -8,23 +8,23 @@ import java.util.UUID
 
 /** Mixin to hydrate state of the aggregate from event store, execute updates and persist events in event store.
   *
-  * @tparam STATE
+  * @tparam S
   *   Type of state.
-  * @tparam EVENT
+  * @tparam E
   *   Type of events.
   */
-trait Hydration[STATE, EVENT]:
+trait Hydration[S, E]:
 
   /** Indicates the least number of events that need to be produced in order to store a snapshot. By default state
     * snapshots are disabled.
     */
   protected def stateSnapshotInterval: Option[Int] = None
 
-  def createNew[F[_]: MonadCancelThrow](sourcedCreation: SourcedEval[Unit, STATE, EVENT, UUID])(using
-      eventHandler: EventHandler[STATE, EVENT]
-  ): Hydrated[STATE, EVENT, Unit, F] = HydratedImpl.createNew(sourcedCreation, stateSnapshotInterval)
+  def createNew[F[_]: MonadCancelThrow](sourcedCreation: SourcedEval[Null, S, E, UUID])(using
+      eventHandler: EventHandler[S, E]
+  ): Hydrated[S, E, Unit, F] = HydratedImpl.createNew(sourcedCreation, stateSnapshotInterval)
 
   def hydrate[F[_]: MonadCancelThrow](aggregateId: UUID)(using
-      eventHandler: EventHandler[STATE, EVENT],
+      eventHandler: EventHandler[S, E],
       compiler: fs2.Compiler[F, F]
-  ): Hydrated[STATE, EVENT, Unit, F] = HydratedImpl.hydrate(aggregateId, stateSnapshotInterval)
+  ): Hydrated[S, E, Unit, F] = HydratedImpl.hydrate(aggregateId, stateSnapshotInterval)

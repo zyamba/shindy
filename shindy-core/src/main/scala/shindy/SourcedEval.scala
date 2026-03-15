@@ -2,6 +2,7 @@ package shindy
 import cats.data.{IndexedReaderWriterStateT, ReaderWriterStateT}
 import cats.instances.either.*
 import cats.instances.vector.*
+import shindy.EventSourced.EventHandler
 
 import scala.annotation.unchecked.uncheckedVariance
 import scala.language.{implicitConversions, reflectiveCalls}
@@ -12,6 +13,34 @@ object SourcedEval:
   class purePartiallyApplied[S, E]:
     def apply[A](a: A): SourcedEval[S, S, E, A] =
       SourcedEval(ReaderWriterStateT.pure[MaybeError, Unit, Vector[E], S, A](a))
+
+  def continue[S, E, Out](block: S => MaybeError[(Vector[E], Out)])(using
+      eventHandler: EventHandler[S, E]
+  ): SourcedEval[S, S, E, Out] = SourcedEval[S, S, E, Out](
+    IndexedReaderWriterStateT((_, sa) =>
+      block(sa).map: (events, out) =>
+        val nextState = events.foldLeft(sa)(eventHandler.apply)
+        (events, nextState, out)
+    )
+  )
+
+  private[shindy] def newFromState[S, E](block: => MaybeError[S]): SourcedEval[Null, S, E, Unit] =
+    SourcedEval[Null, S, E, Unit](
+      IndexedReaderWriterStateT((_, _) =>
+        block.map: state =>
+          (Vector.empty, state, ())
+      )
+    )
+
+  private[shindy] def newFromEvent[S, E, Out](block: => MaybeError[(E, Out)])(using
+      eventHandler: EventHandler[S, E]
+  ): SourcedEval[Null, S, E, Out] = SourcedEval[Null, S, E, Out](
+    IndexedReaderWriterStateT((_, _) =>
+      block.map: (event, out) =>
+        val initialState = eventHandler(null, event)
+        (Vector(event), initialState, out)
+    )
+  )
 
   extension [IN, S, E, A](self: SourcedEval[IN, S, E, A])
     def map[B](f: A => B): SourcedEval[IN, S, E, B] = self.mapInt(f)
@@ -25,10 +54,10 @@ object SourcedEval:
       */
     def run(initialState: IN): Either[String, (Vector[E], S, A)] = self.runInternal(initialState)
 
-  extension [S, E, A](self: SourcedEval[Unit, S, E, A])
+  extension [S, E, A](self: SourcedEval[Null, S, E, A])
     /** Run this program and return events, final state and resulting value
       */
-    def run: Either[String, (Vector[E], S, A)] = self.runInternal(())
+    def run: Either[String, (Vector[E], S, A)] = self.runInternal(null)
 
 /** Sourced update operation with [[A]] as an output. Can be chained using andThen method to create complex operations.
   *
@@ -71,7 +100,7 @@ case class SourcedEval[SA, S, +E, +A](
     * @tparam EB
     *   contravariant event type
     */
-  def widen[EB >: E]: SourcedEval[SA, S, EB, A] = this
+  private def widen[EB >: E]: SourcedEval[SA, S, EB, A] = this
 
   /** Inspect current state.
     */
@@ -112,13 +141,3 @@ case class SourcedEval[SA, S, +E, +A](
 
   private def mapInt[EB >: E, B](f: A => B) =
     SourcedEval(this.widen[EB].readerWriterState.map(f))
-
-  /** Modifies state. Only useful for initialization with a snapshot right now.
-    */
-  private[shindy] def modifyS[SB](block: S => MaybeError[SB]): SourcedEval[SA, SB, E, A] =
-    SourcedEval(
-      this.readerWriterState.flatMap { a =>
-        IndexedReaderWriterStateT: (e, s) =>
-          block(s).map(sb => (Vector.empty, sb, a))
-      }
-    )

@@ -159,7 +159,7 @@ trait EventStoreBehaviors
     }
 
     "not trigger snapshot if snapshot interval not exceeded" taggedAs DatabaseTest in {
-      val initial: SourcedEval[Unit, UserRecord, UserRecordChangeEvent, UUID] =
+      val initial: SourcedEval[Null, UserRecord, UserRecordChangeEvent, UUID] =
         createUser(UUID.randomUUID(), "foo@bar.com")
       val allOps = (1 until (snapshotIntervalValue - 1)).foldLeft(
         createNew[IO](initial).map(_ => ())
